@@ -6,10 +6,17 @@ import RegisterTutor from "../views/RegisterTutor.js";
 import Admin from "../views/Admin.js";
 import RegisterManager from "../views/RegisterManager.js";
 import WalkSummary from "../views/WalkSummary.js";
-import Profile from "../views/Profile.js";
 import Terms from "../views/Terms.js";
 import Privacy from "../views/Privacy.js";
 import MyPets from "../views/MyPets.js";
+import InstallIOS from "../views/InstallIOS.js";
+
+// --- NOVOS IMPORTS DE PERFIL ---
+// Certifique-se de que os arquivos estão nesta pasta ou ajuste o caminho "../views/..."
+import ManagerProfile from "../views/profiles/ManagerProfile.js";
+import TutorProfile from "../views/profiles/TutorProfile.js";
+import WalkerProfile from "../views/profiles/WalkerProfile.js";
+
 import { auth } from "../services/firebase.js";
 
 const routes = {
@@ -21,10 +28,15 @@ const routes = {
   "/walk": ActiveWalk,
   "/login": Login,
   "/summary": WalkSummary,
-  "/profile": Profile,
   "/terms": Terms,
   "/privacy": Privacy,
   "/my-pets": MyPets,
+  "/install-ios": InstallIOS,
+
+  // --- NOVAS ROTAS DE PERFIL ---
+  "/profile/manager": ManagerProfile,
+  "/profile/tutor": TutorProfile,
+  "/profile/walker": WalkerProfile,
 };
 
 // Armazena a view atual para poder chamar o unmount() depois
@@ -32,12 +44,13 @@ let currentView = null;
 
 export const router = async () => {
   // 1. Identificar a rota atual (hash ou pathname)
-  // Usando hash routing para simplicidade em PWA sem config de servidor
   const fullPath = location.hash.slice(1) || "/";
   const path = fullPath.split("?")[0]; // Remove query params para encontrar a rota
 
+  // Define o título da aba do navegador
+  document.title = "Go Paws";
+
   // 2. AUTH GUARD: Verificar autenticação
-  // Precisamos esperar o Firebase inicializar para saber se tem user
   const user = await new Promise((resolve) => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       unsubscribe();
@@ -47,7 +60,6 @@ export const router = async () => {
 
   // 2.1 Admin Guard
   if (path === "/admin") {
-    // IMPORTANTE: Troque pelo seu ID de administrador
     const adminId = "ozSeS2w168YYgQ3oriN0IDvt3sQ2";
     if (!user || user.uid !== adminId) {
       console.warn("Acesso de administrador negado.");
@@ -55,6 +67,7 @@ export const router = async () => {
     }
   }
 
+  // Lista de rotas públicas (que não precisam de login)
   const publicRoutes = [
     "/landing",
     "/register-tutor",
@@ -62,23 +75,33 @@ export const router = async () => {
     "/login",
     "/terms",
     "/privacy",
+    "/install-ios",
   ];
+
+  // Se não tem usuário e não é rota pública, manda pra landing/login
   if (!user && !publicRoutes.includes(path) && path !== "/admin") {
     return navigateTo("/landing");
   }
 
   // 3. Selecionar a View correspondente
+  // Se a rota não existir, volta para Home (ou poderia ser uma 404)
   const View = routes[path] || Home;
 
-  // 4. CICLO DE VIDA: Desmontar a view anterior (Limpeza)
+  // 4. CICLO DE VIDA: Desmontar a view anterior (Limpeza de listeners, timers, etc)
   if (currentView && currentView.unmount) {
-    console.log("Desmontando view anterior...");
+    // console.log("Desmontando view anterior...");
     await currentView.unmount();
   }
 
   // 5. Injetar o HTML (Renderização)
   const app = document.getElementById("app");
-  app.innerHTML = await View.getHtml();
+  // Pequena proteção caso View.getHtml falhe
+  try {
+    app.innerHTML = await View.getHtml();
+  } catch (error) {
+    console.error("Erro ao renderizar view:", error);
+    app.innerHTML = "<p>Erro ao carregar a página.</p>";
+  }
 
   // 6. CICLO DE VIDA: Inicializar a nova view (Scripts/Eventos)
   if (View.init) {
@@ -91,5 +114,5 @@ export const router = async () => {
 
 export const navigateTo = (url) => {
   window.location.hash = url;
-  // O evento hashchange cuidará de chamar o router
+  // O evento hashchange no main.js/index.js cuidará de chamar o router novamente
 };

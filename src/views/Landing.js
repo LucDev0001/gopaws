@@ -11,11 +11,29 @@ export default {
                     <span class="text-3xl">🐾</span> GoPaws.
                 </div>
                 <div class="flex gap-4">
+                    <button id="btn-install-pwa" class="hidden bg-blue-50 text-blue-600 px-4 py-2 rounded-full text-sm font-bold hover:bg-blue-100 transition flex items-center gap-2">📲 <span class="hidden sm:inline">Instalar App</span></button>
                     <button id="btn-login-nav" class="text-sm font-bold text-gray-600 hover:text-black transition">Entrar</button>
                     <button id="btn-register-nav" class="bg-black text-white px-5 py-2 rounded-full text-sm font-bold hover:bg-gray-800 transition shadow-lg transform hover:-translate-y-0.5">Começar</button>
                 </div>
             </div>
         </nav>
+
+        <!-- PWA Install Card -->
+        <div id="pwa-install-card" class="hidden fixed bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-80 bg-white p-5 rounded-2xl shadow-2xl border border-gray-100 z-[100] animate-fade-in-up">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-2xl shadow-lg flex-shrink-0">🐾</div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-gray-900 text-sm">Instalar GoPaws</h3>
+                    <p class="text-xs text-gray-500 mt-1 leading-relaxed">Adicione à tela inicial para uma experiência melhor e acesso offline.</p>
+                </div>
+                <button id="btn-close-pwa-card" class="text-gray-400 hover:text-gray-600 -mt-1 -mr-1 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <button id="btn-pwa-install-action" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition shadow-lg mt-4">
+                Instalar Aplicativo
+            </button>
+        </div>
 
         <!-- Hero Section -->
         <section class="pt-32 pb-20 px-6 text-center lg:text-left max-w-7xl mx-auto lg:flex items-center gap-12">
@@ -187,5 +205,75 @@ export default {
     navTo("btn-hero-tutor", "/register-tutor");
     navTo("btn-hero-manager", "/register-manager");
     navTo("btn-cta-manager", "/register-manager");
+
+    // --- PWA INSTALL LOGIC ---
+    // 1. Registrar Service Worker
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("./service-worker.js")
+        .then(() => console.log("Service Worker Registered"))
+        .catch((err) => console.error("SW Error:", err));
+    }
+
+    // 2. Botão de Instalação
+    const installBtn = document.getElementById("btn-install-pwa");
+    const installCard = document.getElementById("pwa-install-card");
+    const btnInstallAction = document.getElementById("btn-pwa-install-action");
+    const btnCloseCard = document.getElementById("btn-close-pwa-card");
+    let deferredPrompt;
+
+    // --- DETECÇÃO IOS ---
+    const isIOS =
+      /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // Verifica se já está rodando como PWA (standalone)
+    const isStandalone =
+      window.navigator.standalone ||
+      window.matchMedia("(display-mode: standalone)").matches;
+
+    if (isIOS && !isStandalone) {
+      // Mostra o botão, mas muda o comportamento para redirecionar
+      installBtn.classList.remove("hidden");
+
+      const redirectToInstructions = () => {
+        navigateTo("/install-ios");
+      };
+
+      installBtn.addEventListener("click", redirectToInstructions);
+
+      // Opcional: Mostrar o card flutuante também para iOS com texto adaptado?
+      // Por enquanto, vamos focar no botão da navbar para não ser intrusivo demais no iOS
+    }
+
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.classList.remove("hidden");
+
+      // Mostrar card se não foi fechado anteriormente nesta sessão
+      if (!sessionStorage.getItem("pwa-card-dismissed")) {
+        setTimeout(() => {
+          installCard.classList.remove("hidden");
+        }, 2000);
+      }
+    });
+
+    const handleInstall = async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") {
+        installBtn.classList.add("hidden");
+        installCard.classList.add("hidden");
+      }
+      deferredPrompt = null;
+    };
+
+    installBtn.addEventListener("click", handleInstall);
+    btnInstallAction.addEventListener("click", handleInstall);
+
+    btnCloseCard.addEventListener("click", () => {
+      installCard.classList.add("hidden");
+      sessionStorage.setItem("pwa-card-dismissed", "true");
+    });
   },
 };

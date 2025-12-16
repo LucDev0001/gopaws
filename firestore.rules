@@ -25,7 +25,7 @@ service cloud.firestore {
     match /users/{userId} {
       // Leitura: Dono pode ler tudo. 
       // Outros autenticados podem ler APENAS se o alvo for um Walker (Perfil Público)
-      allow read: if isAuthenticated() && (isOwner(userId) || resource.data.role == 'walker' || resource.data.role == 'manager');
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin() || resource.data.role == 'walker' || resource.data.role == 'manager');
       
       // ESCRITA (Create/Update):
       allow write: if isAuthenticated() && (
@@ -84,7 +84,8 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (
         resource.data.tutorId == request.auth.uid || 
         resource.data.walkerId == request.auth.uid ||
-        resource.data.managerId == request.auth.uid
+        resource.data.managerId == request.auth.uid ||
+        isAdmin()
       );
       
       // Criação: Tutores (direto) ou Walkers (ao aceitar pedido)
