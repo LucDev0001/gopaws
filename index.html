@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GoPaws PWA</title>
+    <link rel="icon" href="data:," />
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+          "firebase/analytics": "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js"
+        }
+      }
+    </script>
+    <style>
+      body {
+        touch-action: manipulation;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 h-screen w-screen overflow-hidden">
+    <div id="app" class="h-full w-full flex flex-col relative"></div>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

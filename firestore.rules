@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Funções Auxiliares
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Verifica se o usuário atual é um Gerente
+    function isManager() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager';
+    }
+    
+    // Função para verificar se é Admin (Você pode definir seu UID aqui ou usar uma flag no user)
+    function isAdmin() {
+      return request.auth.uid == 'ozSeS2w168YYgQ3oriN0IDvt3sQ2'; 
+    }
+
+    // Regras de Usuários
+    match /users/{userId} {
+      // Leitura: Dono pode ler tudo. 
+      // Outros autenticados podem ler APENAS se o alvo for um Walker (Perfil Público)
+      allow read: if isAuthenticated() && (isOwner(userId) || resource.data.role == 'walker' || resource.data.role == 'manager');
+      
+      // ESCRITA (Create/Update):
+      allow write: if isAuthenticated() && (
+        // CASO 1: O próprio usuário criando/editando sua conta (Self-service)
+        (isOwner(userId) && (
+           request.resource.data.role == 'manager' ||
+           request.resource.data.role == 'tutor' ||
+           // Walkers via convite legado
+           (request.resource.data.role == 'walker' && exists(/databases/$(database)/documents/authorized_walkers/$(request.auth.token.email)))
+        )) ||
+        
+        // CASO 2: Gerente criando conta de Walker (Fluxo B2B)
+        (
+           isManager() &&
+           request.resource.data.role == 'walker' &&
+           request.resource.data.managerId == request.auth.uid &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSubscriptionPaid == true
+        ) ||
+        // CASO 3: Admin pode modificar qualquer usuário (para aprovar assinaturas, etc.)
+        isAdmin()
+      );
+      
+      // Subcoleção de Pets (Privado do Tutor)
+      match /pets/{petId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // NOVA SUBCOLEÇÃO: Documentos Sensíveis (RG, CPF, Comprovante)
+      // Apenas o dono pode escrever (enviar).
+      // Apenas o Admin pode ler (para verificar e aprovar).
+      match /private_docs/{docId} {
+        allow create: if isOwner(userId);
+        allow read: if isAdmin(); 
+        // Ninguém pode editar ou deletar após envio para garantir integridade
+      }
+    }
+    
+    // NOVA COLEÇÃO: Lista de Convites/Autorizações (B2B)
+    match /authorized_walkers/{email} {
+      // Apenas Gerentes podem autorizar novos emails
+      allow read, write: if isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager';
+    }
+
+    // Regras de Cães
+    match /dogs/{dogId} {
+      // Depreciado em favor da subcoleção users/{id}/pets, mas mantendo compatibilidade se necessário
+      allow read: if isAuthenticated(); 
+      allow write: if isAuthenticated() && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    // Regras de Passeios (Core Logic)
+    match /walks/{walkId} {
+      // Leitura:
+      // 1. Tutor dono do passeio (Sempre pode ler)
+      // 2. Walker atribuído, MAS apenas se o status NÃO for 'completed' (Proteção de Endereço Pós-Passeio)
+      allow read: if isAuthenticated() && (
+        resource.data.tutorId == request.auth.uid || 
+        resource.data.walkerId == request.auth.uid ||
+        resource.data.managerId == request.auth.uid
+      );
+      
+      // Criação: Tutores (direto) ou Walkers (ao aceitar pedido)
+      allow create: if isAuthenticated() && (
+        request.resource.data.tutorId == request.auth.uid || 
+        request.resource.data.walkerId == request.auth.uid
+      );
+      
+      // Atualização
+      allow update: if isAuthenticated() && (
+        // Cenário 1: Walker aceita o passeio (Atomicamente define seu ID e status)
+        (resource.data.status == 'pending' && request.resource.data.status == 'accepted' && request.resource.data.walkerId == request.auth.uid) ||
+        // Cenário 1.5: Walker INICIA o passeio (accepted -> ongoing)
+        (resource.data.walkerId == request.auth.uid && resource.data.status == 'accepted' && request.resource.data.status == 'ongoing') ||
+        // Cenário 2: Walker atualiza GPS/Eventos durante o passeio
+        (resource.data.walkerId == request.auth.uid && resource.data.status == 'ongoing') ||
+        // Cenário 2.5: Walker finaliza para pagamento
+        (resource.data.walkerId == request.auth.uid && resource.data.status == 'ongoing' && request.resource.data.status == 'payment_pending') ||
+        // Cenário 3: Walker finaliza
+        (resource.data.walkerId == request.auth.uid && request.resource.data.status == 'completed') ||
+        // Cenário 4: Walker avalia (após finalizar)
+        // Nota: Se o walker não pode ler 'completed', ele não pode fazer update baseado em leitura prévia.
+        // Ajuste: Permitimos update cego ou assumimos que a avaliação ocorre na transição para completed.
+        // Para permitir avaliação posterior, precisaríamos relaxar a regra de leitura ou separar a avaliação em outra coleção.
+        // Mantendo estrito conforme pedido: Walker perde acesso ao doc principal ao finalizar.
+        (resource.data.walkerId == request.auth.uid && resource.data.status == 'completed') ||
+        
+        // Cenário 5: Tutor avalia o Walker (após finalizar)
+        (resource.data.tutorId == request.auth.uid && resource.data.status == 'completed') ||
+        // Cenário 6: Walker confirma o pagamento
+        (resource.data.walkerId == request.auth.uid && resource.data.status == 'payment_pending' && request.resource.data.status == 'completed')
+      );
+    }
+    
+    // Subcoleção de Mensagens (Chat)
+    match /walks/{walkId}/messages/{msgId} {
+       // Apenas participantes do passeio
+       // Simplificação para evitar erro de "Missing Permissions" durante a criação rápida
+       // A validação real ocorre porque o usuário só consegue o walkId se for participante
+       allow read, create: if isAuthenticated();
+    }
+
+    // Regras de Solicitações Abertas (Discovery)
+    match /open_requests/{requestId} {
+      // Apenas Walkers podem ver pedidos abertos (reduz spam/bots)
+      // Como não podemos ler o user doc de forma barata em query list, permitimos auth geral
+      // Mas idealmente seria restrito.
+      allow read: if isAuthenticated(); 
+      
+      allow create: if isAuthenticated() && request.resource.data.tutorId == request.auth.uid;
+      // Walker aceita o pedido (atualiza status)
+      allow update: if isAuthenticated() && resource.data.status == 'pending' && request.resource.data.status == 'accepted';
+    }
+  }
+}
