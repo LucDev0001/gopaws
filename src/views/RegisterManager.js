@@ -5,81 +5,93 @@ import { toastService } from "../utils/toastService.js";
 export default {
   getHtml() {
     return `
-      <div class="min-h-screen bg-gray-50 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden animate-fade-in">
-          <!-- Background Elements -->
-          <div class="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-              <div class="absolute top-[-10%] left-[-5%] w-96 h-96 bg-gray-300 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
-              <div class="absolute bottom-[-10%] right-[-5%] w-96 h-96 bg-gray-400 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+      <div class="h-screen w-full bg-white flex overflow-hidden font-sans">
+          
+          <div class="hidden md:flex md:w-5/12 lg:w-4/12 bg-gray-900 relative flex-col justify-between p-12 text-white overflow-hidden">
+              <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1541599540903-216a46ca1dc0?q=80&w=1471&auto=format&fit=crop')] bg-cover bg-center opacity-20 mix-blend-overlay"></div>
+              <div class="absolute inset-0 bg-gradient-to-b from-black/60 to-gray-900/90"></div>
+              
+              <div class="relative z-10">
+                  <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-white/10 backdrop-blur-md mb-6 border border-white/20">
+                      🏢
+                  </div>
+                  <h1 class="text-4xl font-bold mb-2 tracking-tight">GoPaws Business</h1>
+                  <p class="text-gray-400 text-lg font-light">Gerencie sua Pet Shop com inteligência.</p>
+              </div>
+
+              <div class="relative z-10 space-y-4">
+                  <div class="flex items-center gap-3 text-sm text-gray-300">
+                      <span class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">✓</span>
+                      <span>Controle Financeiro</span>
+                  </div>
+                  <div class="flex items-center gap-3 text-sm text-gray-300">
+                      <span class="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">✓</span>
+                      <span>Gestão de Clientes</span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-8">© 2025 GoPaws Inc.</p>
+              </div>
           </div>
 
-          <div class="max-w-lg w-full bg-white rounded-3xl shadow-xl p-8 relative z-10 border border-gray-100">
-              <div class="text-center mb-8">
-                  <div class="inline-block p-3 rounded-full bg-gray-100 text-gray-800 mb-4 text-2xl shadow-sm">🏢</div>
-                  <h2 class="text-3xl font-bold text-gray-900">Parceiro GoPaws</h2>
-                  <p class="text-gray-500 mt-2">Cadastre sua Pet Shop ou Agência.</p>
+          <div class="flex-1 h-full relative flex flex-col bg-white overflow-y-auto">
+              
+              <div class="flex-1 flex flex-col justify-center px-4 sm:px-8 py-6 md:p-12 max-w-2xl mx-auto w-full">
+                  
+                  <div class="md:hidden mb-6 text-center">
+                      <h2 class="text-2xl font-bold text-gray-900">GoPaws Business</h2>
+                      <p class="text-sm text-gray-500">Crie sua conta corporativa</p>
+                  </div>
+
+                  <div class="hidden md:block mb-6">
+                      <h2 class="text-2xl font-bold text-gray-900">Cadastre sua Empresa</h2>
+                  </div>
+
+                  <form id="register-manager-form" class="space-y-4">
+                      <div>
+                          <input type="text" id="name" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition text-sm" placeholder="Nome da Empresa" required>
+                      </div>
+                      
+                      <div class="grid grid-cols-2 gap-3">
+                          <input type="text" id="cnpj" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition text-sm" placeholder="CNPJ" required>
+                          <input type="tel" id="phone" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition text-sm" placeholder="Telefone" required>
+                      </div>
+
+                      <div>
+                          <input type="text" id="address" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition text-sm" placeholder="Endereço Comercial" required>
+                      </div>
+
+                      <div class="grid grid-cols-2 gap-3 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                          <div class="col-span-2 text-[10px] uppercase font-bold text-blue-800 tracking-wider">Dados Financeiros (PIX)</div>
+                          <input type="text" id="pixKey" class="w-full px-3 py-2 bg-white border border-blue-200 rounded-md focus:ring-1 focus:ring-blue-500 outline-none text-sm" placeholder="Chave PIX" required>
+                          <input type="tel" id="whatsappNumber" class="w-full px-3 py-2 bg-white border border-blue-200 rounded-md focus:ring-1 focus:ring-blue-500 outline-none text-sm" placeholder="WhatsApp" required>
+                      </div>
+
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <input type="email" id="email" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition text-sm" placeholder="E-mail de acesso" required>
+                          <input type="password" id="password" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition text-sm" placeholder="Senha" required>
+                      </div>
+                      
+                      <div class="pt-2">
+                          <div class="flex items-center gap-2 mb-4">
+                              <input type="checkbox" id="terms" class="w-4 h-4 rounded border-gray-300 text-black focus:ring-black" required>
+                              <label for="terms" class="text-xs text-gray-500">Li e concordo com os <a href="#/terms" class="text-black font-bold underline">Termos</a>.</label>
+                          </div>
+
+                          <button type="submit" class="w-full bg-black text-white font-bold py-3.5 rounded-lg shadow-md hover:bg-gray-800 transition active:scale-[0.98]">
+                              Cadastrar Empresa
+                          </button>
+                      </div>
+                  </form>
+                  
+                  <p class="text-center text-gray-400 text-xs mt-4">
+                      Já tem conta? <a href="#/login" class="text-black font-bold hover:underline">Entrar</a>
+                  </p>
               </div>
-              
-              <form id="register-manager-form" class="space-y-4">
-                  <div>
-                      <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Nome da Empresa</label>
-                      <input type="text" id="name" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition" placeholder="Ex: Pet Shop Feliz" required>
-                  </div>
-                  
-                  <div class="grid grid-cols-2 gap-4">
-                      <div>
-                          <label class="block text-xs font-bold text-gray-400 uppercase mb-1">CNPJ</label>
-                          <input type="text" id="cnpj" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition" placeholder="00.000.000/0001-00" required>
-                      </div>
-                      <div>
-                          <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Telefone</label>
-                          <input type="tel" id="phone" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition" placeholder="(00) 00000-0000" required>
-                      </div>
-                  </div>
-
-                  <div>
-                      <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Endereço Comercial</label>
-                      <input type="text" id="address" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition" placeholder="Rua, Número, Bairro" required>
-                  </div>
-
-                  <div class="bg-gray-50 p-5 rounded-xl border border-gray-200 space-y-4">
-                      <h4 class="text-xs font-bold text-gray-500 uppercase text-center">Dados para Pagamento (PIX)</h4>
-                      <div>
-                          <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Chave PIX</label>
-                          <input type="text" id="pixKey" class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none transition" placeholder="Seu CNPJ, Email ou Telefone" required>
-                      </div>
-                      <div>
-                          <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Nº WhatsApp (com DDD)</label>
-                          <input type="tel" id="whatsappNumber" class="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:border-transparent outline-none transition" placeholder="21987654321" required>
-                      </div>
-                  </div>
-
-                  <div>
-                      <label class="block text-xs font-bold text-gray-400 uppercase mb-1">E-mail</label>
-                      <input type="email" id="email" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition" required>
-                  </div>
-                  <div>
-                      <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Senha</label>
-                      <input type="password" id="password" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-black focus:border-transparent outline-none transition" required>
-                  </div>
-                  
-                  <div class="flex items-start gap-3 pt-2">
-                      <input type="checkbox" id="terms" class="mt-1 w-5 h-5 rounded border-gray-300 text-black focus:ring-black" required>
-                      <label for="terms" class="text-sm text-gray-600 leading-tight">Li e concordo com os <a href="#/terms" class="text-black font-bold underline">Termos de Uso</a> e a <a href="#/privacy" class="text-black font-bold underline">Política de Privacidade</a>.</label>
-                  </div>
-
-                  <button type="submit" class="w-full bg-black text-white font-bold py-4 rounded-xl shadow-lg hover:bg-gray-800 transition mt-4">
-                      Cadastrar Empresa
-                  </button>
-              </form>
-              
-              <p class="text-center text-gray-400 text-sm mt-6">
-                  Já tem conta? <a href="#/login" class="text-black font-bold hover:underline">Entrar</a>
-              </p>
           </div>
       </div>
     `;
   },
   init() {
+    // A lógica permanece a mesma
     document
       .getElementById("register-manager-form")
       .addEventListener("submit", async (e) => {
