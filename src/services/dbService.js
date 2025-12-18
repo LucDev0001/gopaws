@@ -15,6 +15,7 @@ import {
   orderBy,
   onSnapshot,
   limit,
+  runTransaction,
 } from "firebase/firestore";
 
 export const dbService = {
@@ -62,11 +63,28 @@ export const dbService = {
   },
 
   // Confirma o pagamento e finaliza o ciclo
-  async confirmPayment(walkId) {
-    const ref = doc(db, "walks", walkId);
-    await updateDoc(ref, {
-      status: "completed",
-      paymentStatus: "paid",
+  async confirmPayment(walkId, paymentMethod, price, tutorId) {
+    await runTransaction(db, async (transaction) => {
+      const walkRef = doc(db, "walks", walkId);
+
+      // Se for pagamento via SALDO, deduzir do Tutor
+      if (paymentMethod === "balance") {
+        const tutorRef = doc(db, "users", tutorId);
+        const tutorDoc = await transaction.get(tutorRef);
+        if (!tutorDoc.exists()) throw new Error("Tutor não encontrado");
+
+        const currentBalance = Number(tutorDoc.data().balance || 0);
+        const cost = Number(price);
+
+        if (currentBalance < cost) throw new Error("Saldo insuficiente.");
+
+        transaction.update(tutorRef, { balance: currentBalance - cost });
+      }
+
+      transaction.update(walkRef, {
+        status: "completed",
+        paymentStatus: "paid",
+      });
     });
   },
 
@@ -85,7 +103,12 @@ export const dbService = {
     const q = query(collection(db, "walks"), where(field, "==", userId));
 
     const snapshot = await getDocs(q);
-    const walks = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const walks = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      // Filtra itens deletados pelo usuário específico
+      .filter((w) =>
+        role === "walker" ? !w.deletedByWalker : !w.deletedByTutor
+      );
 
     // Ordenação em memória por data (mais recente primeiro)
     return walks.sort((a, b) => {
@@ -93,6 +116,13 @@ export const dbService = {
       const tB = b.startTime ? b.startTime.seconds : 0;
       return tB - tA;
     });
+  },
+
+  // Ocultar histórico (Soft Delete)
+  async hideWalkHistory(walkId, role) {
+    const ref = doc(db, "walks", walkId);
+    const field = role === "walker" ? "deletedByWalker" : "deletedByTutor";
+    await updateDoc(ref, { [field]: true });
   },
 
   // CHAT: Enviar mensagem
@@ -155,8 +185,8 @@ export const dbService = {
   async getAllManagers() {
     const q = query(
       collection(db, "users"),
-      where("role", "==", "manager"),
-      orderBy("createdAt", "desc")
+      where("role", "==", "manager")
+      // orderBy("createdAt", "desc") // Removido para evitar erro de índice no MVP
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -218,5 +248,90 @@ export const dbService = {
     const promises = ids.map((id) => getDoc(doc(db, "users", id)));
     const docs = await Promise.all(promises);
     return docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
+
+  // NOTIFICAÇÕES: Salvar Token FCM do dispositivo
+  async saveFCMToken(userId, token) {
+    const ref = doc(db, "users", userId);
+    await updateDoc(ref, {
+      fcmToken: token,
+      lastLogin: serverTimestamp(),
+    });
+  },
+
+  // WALKER: Alternar Status Online/Offline
+  async toggleWalkerStatus(userId, isActive) {
+    const ref = doc(db, "users", userId);
+    await updateDoc(ref, { isActive: isActive });
+  },
+
+  // --- CARTEIRA / FINANCEIRO ---
+
+  // TUTOR: Criar intenção de depósito
+  async createDepositRequest(tutorId, managerId, amount) {
+    const user = auth.currentUser;
+    if (!user) throw new Error("Usuário não autenticado");
+
+    await addDoc(collection(db, "wallet_transactions"), {
+      tutorId: user.uid, // Garante consistência com regras de segurança
+      managerId,
+      amount: Number(amount),
+      type: "deposit",
+      status: "pending",
+      createdAt: serverTimestamp(),
+    });
+  },
+
+  // MANAGER: Aprovar depósito (Adiciona saldo ao Tutor)
+  async approveDeposit(transactionId) {
+    await runTransaction(db, async (transaction) => {
+      const transRef = doc(db, "wallet_transactions", transactionId);
+      const transDoc = await transaction.get(transRef);
+
+      if (!transDoc.exists()) throw new Error("Transação não encontrada");
+      const data = transDoc.data();
+      if (data.status !== "pending") throw new Error("Transação já processada");
+
+      const tutorRef = doc(db, "users", data.tutorId);
+      const tutorDoc = await transaction.get(tutorRef);
+
+      const currentBalance = tutorDoc.exists()
+        ? Number(tutorDoc.data().balance || 0)
+        : 0;
+      const newBalance = currentBalance + Number(data.amount);
+
+      // 1. Atualiza saldo do Tutor
+      transaction.update(tutorRef, { balance: newBalance });
+
+      // 2. Marca transação como concluída
+      transaction.update(transRef, {
+        status: "completed",
+        approvedAt: serverTimestamp(),
+      });
+    });
+  },
+
+  // MANAGER: Rejeitar depósito
+  async rejectDeposit(transactionId) {
+    const ref = doc(db, "wallet_transactions", transactionId);
+    await updateDoc(ref, { status: "rejected" });
+  },
+
+  // TUTOR: Buscar histórico da carteira
+  async getWalletHistory(userId) {
+    // Busca depósitos
+    const q = query(
+      collection(db, "wallet_transactions"),
+      where("tutorId", "==", userId),
+      orderBy("createdAt", "desc")
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  },
+
+  // TUTOR: Ler saldo atual (Helper rápido, mas ideal é ler do userDoc no init)
+  async getBalance(userId) {
+    const snap = await getDoc(doc(db, "users", userId));
+    return snap.exists() ? Number(snap.data().balance || 0) : 0;
   },
 };

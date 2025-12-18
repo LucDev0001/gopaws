@@ -132,18 +132,39 @@ export default {
 
     // SOS Listener
     document.getElementById("btn-sos").addEventListener("click", async () => {
-      if (
-        confirm(
-          "ATENÇÃO: Isso enviará um alerta de emergência para o suporte e contatos. Confirmar?"
-        )
-      ) {
+      // Cria um modal moderno para confirmação
+      const modal = document.createElement("div");
+      modal.className =
+        "fixed inset-0 bg-black/80 z-[2000] flex items-center justify-center p-4";
+      modal.innerHTML = `
+        <div class="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl animate-fade-in">
+            <div class="text-5xl mb-4">🆘</div>
+            <h2 class="text-2xl font-black text-red-600 mb-2">Confirmar Emergência?</h2>
+            <p class="text-gray-600 mb-6 text-sm">Isso enviará um alerta imediato para a central e para os contatos de emergência com sua localização.</p>
+            <div class="grid grid-cols-2 gap-3">
+                <button id="cancel-sos" class="py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200">Cancelar</button>
+                <button id="confirm-sos" class="py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg">CONFIRMAR</button>
+            </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      document.getElementById("cancel-sos").onclick = () => modal.remove();
+
+      document.getElementById("confirm-sos").onclick = async () => {
+        modal.remove();
         try {
           await dbService.sendSOS(walkId);
-          toastService.error("ALERTA DE SOS ENVIADO!");
+          toastService.error("🚨 ALERTA DE SOS ENVIADO COM SUCESSO!");
+          // Feedback visual no botão
+          const btn = document.getElementById("btn-sos");
+          btn.classList.add("bg-red-800", "animate-ping");
+          btn.innerText = "SOS ENVIADO";
         } catch (e) {
-          toastService.error(e.message);
+          console.error(e);
+          toastService.error("Erro ao enviar SOS: " + e.message);
         }
-      }
+      };
     });
 
     // Walker Actions
@@ -160,14 +181,29 @@ export default {
     });
 
     btnFinish.addEventListener("click", async () => {
-      if (confirm("Finalizar passeio?")) {
-        try {
-          await dbService.finishWalk(walkId);
-          // Navigation handled by snapshot listener
-        } catch (e) {
-          toastService.error(e.message);
-        }
-      }
+      const modal = document.createElement("div");
+      modal.className =
+        "fixed inset-0 bg-black/60 z-[2000] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in";
+      modal.innerHTML = `
+            <div class="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl">
+                <div class="text-4xl mb-2">🏁</div>
+                <h3 class="font-bold text-xl text-gray-900 mb-2">Finalizar Passeio?</h3>
+                <p class="text-gray-500 text-sm mb-6">Certifique-se de que entregou o pet em segurança ao tutor.</p>
+                <div class="flex gap-3">
+                    <button id="btn-cancel-finish" class="flex-1 py-3 rounded-xl font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">Voltar</button>
+                    <button id="btn-confirm-finish" class="flex-1 py-3 rounded-xl font-bold text-white bg-green-600 hover:bg-green-700 shadow-lg transition">Finalizar</button>
+                </div>
+            </div>
+        `;
+      document.body.appendChild(modal);
+
+      document.getElementById("btn-cancel-finish").onclick = () =>
+        modal.remove();
+      document.getElementById("btn-confirm-finish").onclick = async () => {
+        modal.remove();
+        await dbService.finishWalk(walkId);
+        // Navigation handled by snapshot listener
+      };
     });
 
     // Event Listeners (Xixi/Cocô)
@@ -244,6 +280,7 @@ export default {
           return navigateTo("/");
         }
         const data = docSnap.data();
+        const previousStatus = this.lastStatus || data.status;
 
         // Atualiza UI baseada no status
         const title = document.getElementById("status-title");
@@ -281,6 +318,17 @@ export default {
           title.innerText = "Em Passeio 🐕";
           sub.innerText = "Acompanhe em tempo real.";
 
+          // Notificação de Início (Se mudou agora)
+          if (
+            previousStatus !== "ongoing" &&
+            Notification.permission === "granted"
+          ) {
+            new Notification("Passeio Iniciado! 🐕", {
+              body: `O passeio com ${data.dogName} começou.`,
+              icon: "/favicon.ico",
+            });
+          }
+
           // Lógica de Rastreamento (Apenas Walker)
           if (isWalker && !watchId) {
             watchId = navigator.geolocation.watchPosition(
@@ -298,25 +346,69 @@ export default {
           }
         } else if (data.status === "completed") {
           toastService.success("Passeio finalizado!");
+
+          // Notificação de Fim
+          if (
+            previousStatus !== "completed" &&
+            Notification.permission === "granted"
+          ) {
+            new Notification("Passeio Finalizado 🏁", {
+              body: `O passeio com ${data.dogName} foi concluído com sucesso.`,
+              icon: "/favicon.ico",
+            });
+          }
           navigateTo("/summary"); // Ir para resumo
         } else if (data.status === "payment_pending") {
           if (isWalker) {
             // Walker's view: show confirmation button
             title.innerText = "Aguardando Pagamento";
-            sub.innerText = "Peça ao tutor para mostrar o comprovante.";
+
+            if (data.paymentMethod === "balance") {
+              sub.innerText = "Pagamento via Saldo. Confirme para finalizar.";
+            } else if (
+              data.paymentMethod === "cash" ||
+              data.paymentMethod === "card"
+            ) {
+              sub.innerText =
+                "Receba o pagamento (Dinheiro/Máquina) e confirme.";
+            } else {
+              sub.innerText = "Peça ao tutor para mostrar o comprovante PIX.";
+            }
+
             document.getElementById("walker-actions").innerHTML = `
               <button id="btn-confirm-payment" class="col-span-2 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg">Confirmar Pagamento</button>
             `;
             document
               .getElementById("btn-confirm-payment")
               .addEventListener("click", async () => {
-                await dbService.confirmPayment(walkId);
+                // Passa dados extras para dedução de saldo se necessário
+                await dbService.confirmPayment(
+                  walkId,
+                  data.paymentMethod,
+                  data.price,
+                  data.tutorId
+                );
               });
           } else {
             // Tutor's view: show payment modal
-            showPaymentModal(data);
+            if (data.paymentMethod === "balance") {
+              const panel = document.getElementById("walk-panel");
+              if (panel)
+                panel.innerHTML = `<div class="p-6 text-center"><h3 class="font-bold text-lg text-green-600">Pagamento via Saldo</h3><p class="text-gray-500 text-sm">O valor será debitado automaticamente quando o walker confirmar.</p></div>`;
+            } else if (
+              data.paymentMethod === "cash" ||
+              data.paymentMethod === "card"
+            ) {
+              const panel = document.getElementById("walk-panel");
+              if (panel)
+                panel.innerHTML = `<div class="p-6 text-center"><h3 class="font-bold text-lg">Pagamento Presencial</h3><p class="text-gray-500 text-sm">Realize o pagamento diretamente ao walker.</p></div>`;
+            } else {
+              showPaymentModal(data);
+            }
           }
         }
+
+        this.lastStatus = data.status;
 
         // Controles do Walker
         if (isWalker) {

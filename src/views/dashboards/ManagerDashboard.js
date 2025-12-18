@@ -19,6 +19,8 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { toastService } from "../../utils/toastService.js";
+import { pwaService } from "../../services/pwaService.js";
+import { dbService } from "../../services/dbService.js";
 
 // --- Funções Auxiliares ---
 const maskCPF = (value) => {
@@ -62,6 +64,9 @@ export default {
           <button data-tab="team" class="nav-item w-full flex items-center gap-4 px-4 py-4 rounded-xl text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200 group text-sm font-medium">
             <span class="group-hover:scale-110 transition-transform text-lg">👥</span> <span>Equipe</span>
           </button>
+          <button data-tab="finance" class="nav-item w-full flex items-center gap-4 px-4 py-4 rounded-xl text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200 group text-sm font-medium">
+            <span class="group-hover:scale-110 transition-transform text-lg">💰</span> <span>Financeiro</span>
+          </button>
           <button data-tab="billing" class="nav-item w-full flex items-center gap-4 px-4 py-4 rounded-xl text-gray-400 hover:bg-gray-800 hover:text-white transition-all duration-200 group text-sm font-medium">
             <span class="group-hover:scale-110 transition-transform text-lg">💳</span> <span>Assinatura</span>
           </button>
@@ -103,6 +108,10 @@ export default {
             <span class="text-2xl mb-1">👥</span>
             <span class="text-[10px] font-bold uppercase tracking-wider">Equipe</span>
         </button>
+        <button data-tab="finance" class="nav-item-mobile flex flex-col items-center justify-center w-full py-2 text-gray-400 active:text-blue-600 transition-colors">
+            <span class="text-2xl mb-1">💰</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider">Finan</span>
+        </button>
         <button data-tab="billing" class="nav-item-mobile flex flex-col items-center justify-center w-full py-2 text-gray-400 active:text-blue-600 transition-colors">
             <span class="text-2xl mb-1">💳</span>
             <span class="text-[10px] font-bold uppercase tracking-wider">Conta</span>
@@ -116,6 +125,10 @@ export default {
     const mainContent = document.getElementById("main-content");
 
     // --- RENDERERS ---
+
+    // Audio SOS
+    const sosAudio = new Audio("./src/assets/sounds/sos.mp3");
+    sosAudio.loop = true;
 
     const renderDashboard = async () => {
       // Bloqueio de Assinatura
@@ -201,8 +214,25 @@ export default {
                         <h3 class="font-bold text-gray-800 mb-6 flex items-center gap-2">
                             <span class="bg-blue-100 text-blue-600 p-1.5 rounded-lg text-sm">🕒</span> Atividade Recente
                         </h3>
+                        
+                        <!-- Filtros e Paginação -->
+                        <div class="flex gap-2 mb-4">
+                            <input type="text" id="history-filter" placeholder="Filtrar por nome..." class="w-full px-3 py-2 bg-gray-50 rounded-lg text-xs border border-gray-200">
+                            <select id="history-status" class="px-3 py-2 bg-gray-50 rounded-lg text-xs border border-gray-200">
+                                <option value="all">Todos</option>
+                                <option value="completed">Concluídos</option>
+                                <option value="ongoing">Em andamento</option>
+                            </select>
+                        </div>
+
                         <div id="recent-activity-list" class="space-y-2 flex-1">
                             <p class="text-gray-400 text-sm animate-pulse">Carregando dados...</p>
+                        </div>
+                        
+                        <div class="mt-4 flex justify-center gap-2">
+                            <button id="btn-prev-page" class="px-3 py-1 bg-gray-100 rounded text-xs disabled:opacity-50">Anterior</button>
+                            <span id="page-indicator" class="text-xs self-center">Pag 1</span>
+                            <button id="btn-next-page" class="px-3 py-1 bg-gray-100 rounded text-xs disabled:opacity-50">Próxima</button>
                         </div>
                     </div>
                 </div>
@@ -293,6 +323,55 @@ export default {
         }
       }, 500);
 
+      // --- Lógica SOS (Manager) ---
+      const qSOS = query(
+        collection(db, "walks"),
+        where("managerId", "==", user.uid),
+        where("sos", "==", true),
+        where("status", "==", "ongoing")
+      );
+
+      const unsubSOS = onSnapshot(qSOS, (snap) => {
+        if (!snap.empty) {
+          // Tocar som se houver SOS ativo
+          sosAudio
+            .play()
+            .catch((e) => console.log("Interação necessária para audio"));
+
+          const sosData = snap.docs[0].data();
+          // Mostrar Alerta Visual
+          if (!document.getElementById("sos-alert-modal")) {
+            const modal = document.createElement("div");
+            modal.id = "sos-alert-modal";
+            modal.className =
+              "fixed inset-0 bg-red-900/90 z-[9999] flex items-center justify-center animate-pulse";
+            modal.innerHTML = `
+                    <div class="bg-white p-8 rounded-3xl text-center max-w-md shadow-2xl border-8 border-red-500 relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-4 bg-red-500 animate-loading-bar"></div>
+                        <div class="text-7xl mb-4 animate-bounce">🚨</div>
+                        <h2 class="text-4xl font-black text-red-600 mb-2 tracking-tighter">SOS ATIVO</h2>
+                        <div class="bg-red-50 p-4 rounded-xl border border-red-100 mb-6 text-left">
+                            <p class="text-sm text-red-800 font-bold uppercase">Walker</p>
+                            <p class="text-xl font-bold text-gray-900 mb-2">${sosData.walkerName}</p>
+                            <p class="text-sm text-red-800 font-bold uppercase">Pet</p>
+                            <p class="text-xl font-bold text-gray-900">${sosData.dogName}</p>
+                        </div>
+                        <p class="text-gray-500 mb-6 text-sm">Entre em contato imediatamente com o profissional.</p>
+                        <button onclick="document.getElementById('sos-alert-modal').remove(); window.sosAudioStop();" class="w-full bg-red-600 text-white py-4 rounded-xl font-bold text-xl hover:bg-red-700 shadow-lg transform active:scale-95 transition">
+                            Ciente - Parar Alerta
+                        </button>
+                    </div>
+                `;
+            document.body.appendChild(modal);
+            window.sosAudioStop = () => {
+              sosAudio.pause();
+              sosAudio.currentTime = 0;
+            };
+          }
+        }
+      });
+      unsubscribeListeners.push(unsubSOS);
+
       // --- Lógica de Busca de Dados ---
       const qWalks = query(
         collection(db, "walks"),
@@ -305,12 +384,15 @@ export default {
         where("role", "==", "walker")
       );
 
+      let allWalksData = []; // Armazena para filtrar localmente
+      let currentPage = 1;
+      const itemsPerPage = 5;
+
       const unsubWalks = onSnapshot(qWalks, {
         next: (snap) => {
           let totalRevenue = 0;
           let walksCount = snap.size;
           let walkerStats = {};
-          let recentHtml = "";
 
           snap.docs.forEach((doc, index) => {
             const data = doc.data();
@@ -329,24 +411,56 @@ export default {
                 walkerStats[data.walkerId].ratingCount++;
               }
             }
-            if (index < 5) {
-              const date = data.createdAt
-                ? new Date(data.createdAt.seconds * 1000).toLocaleDateString()
-                : "";
-              const statusBadge =
-                data.status === "completed"
-                  ? `<span class="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">Concluído</span>`
-                  : `<span class="bg-yellow-100 text-yellow-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">${data.status}</span>`;
+          });
 
-              recentHtml += `
-                  <div class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition cursor-default">
+          // Armazena dados brutos para paginação/filtro
+          allWalksData = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+          // Função de Renderização da Lista com Filtros
+          const renderHistoryList = () => {
+            const filterText =
+              document.getElementById("history-filter")?.value.toLowerCase() ||
+              "";
+            const filterStatus =
+              document.getElementById("history-status")?.value || "all";
+
+            let filtered = allWalksData.filter((w) => {
+              const matchesText =
+                (w.walkerName || "").toLowerCase().includes(filterText) ||
+                (w.dogName || "").toLowerCase().includes(filterText);
+              const matchesStatus =
+                filterStatus === "all" ||
+                (filterStatus === "completed" && w.status === "completed") ||
+                (filterStatus === "ongoing" &&
+                  ["ongoing", "accepted"].includes(w.status));
+              return matchesText && matchesStatus;
+            });
+
+            const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            const start = (currentPage - 1) * itemsPerPage;
+            const paginated = filtered.slice(start, start + itemsPerPage);
+
+            let html = paginated
+              .map((data) => {
+                const date = data.createdAt
+                  ? new Date(data.createdAt.seconds * 1000).toLocaleDateString()
+                  : "";
+                const statusBadge =
+                  data.status === "completed"
+                    ? `<span class="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">Concluído</span>`
+                    : `<span class="bg-yellow-100 text-yellow-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase">${data.status}</span>`;
+
+                return `
+                  <div class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition cursor-default border-b border-gray-50 last:border-0">
                       <div class="flex items-center gap-3">
-                          <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-lg">🐕</div>
+                          <div class="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-sm">🐕</div>
                           <div>
-                              <p class="text-sm font-bold text-gray-800">${
+                              <p class="text-xs font-bold text-gray-800">${
                                 data.dogName || "Pet"
                               }</p>
-                              <p class="text-xs text-gray-400">${
+                              <p class="text-[10px] text-gray-400">${
                                 data.walkerName || "..."
                               }</p>
                           </div>
@@ -356,8 +470,55 @@ export default {
                           <p class="text-[10px] text-gray-400 font-mono">${date}</p>
                       </div>
                   </div>`;
-            }
-          });
+              })
+              .join("");
+
+            const container = document.getElementById("recent-activity-list");
+            if (container)
+              container.innerHTML =
+                html ||
+                '<p class="text-gray-400 text-xs p-2">Nada encontrado.</p>';
+
+            // Atualiza controles
+            document.getElementById(
+              "page-indicator"
+            ).innerText = `Pag ${currentPage}/${totalPages}`;
+            document.getElementById("btn-prev-page").disabled =
+              currentPage === 1;
+            document.getElementById("btn-next-page").disabled =
+              currentPage === totalPages;
+          };
+
+          // Listeners de Filtro
+          document
+            .getElementById("history-filter")
+            ?.addEventListener("input", () => {
+              currentPage = 1;
+              renderHistoryList();
+            });
+          document
+            .getElementById("history-status")
+            ?.addEventListener("change", () => {
+              currentPage = 1;
+              renderHistoryList();
+            });
+          document
+            .getElementById("btn-prev-page")
+            ?.addEventListener("click", () => {
+              if (currentPage > 1) {
+                currentPage--;
+                renderHistoryList();
+              }
+            });
+          document
+            .getElementById("btn-next-page")
+            ?.addEventListener("click", () => {
+              currentPage++;
+              renderHistoryList();
+            });
+
+          // Render inicial
+          renderHistoryList();
 
           const revEl = document.getElementById("kpi-revenue");
           if (revEl)
@@ -369,13 +530,6 @@ export default {
           if (growthEl) growthEl.innerText = `${walksCount} passeios`;
           const walksEl = document.getElementById("kpi-walks");
           if (walksEl) walksEl.innerText = walksCount;
-          const recentContainer = document.getElementById(
-            "recent-activity-list"
-          );
-          if (recentContainer)
-            recentContainer.innerHTML =
-              recentHtml ||
-              '<p class="text-gray-400 text-sm p-4">Nenhuma atividade recente.</p>';
 
           const walkersArray = Object.values(walkerStats).map((w) => ({
             ...w,
@@ -610,25 +764,132 @@ export default {
 
         document.querySelectorAll(".btn-delete-walker").forEach((btn) => {
           btn.addEventListener("click", async (e) => {
-            if (
-              confirm(
-                "Remover este walker da sua equipe? Ele perderá o acesso."
-              )
-            ) {
+            const walkerId = e.currentTarget.dataset.id;
+
+            // Modal Customizado
+            const modal = document.createElement("div");
+            modal.className =
+              "fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in";
+            modal.innerHTML = `
+                <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100">
+                    <h3 class="font-bold text-lg text-gray-900 mb-2">Remover Profissional?</h3>
+                    <p class="text-gray-500 text-sm mb-6">Ele perderá o acesso à sua equipe e não poderá mais realizar passeios em nome da agência.</p>
+                    <div class="flex gap-3">
+                        <button id="btn-cancel-del" class="flex-1 py-3 rounded-xl font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">Cancelar</button>
+                        <button id="btn-confirm-del" class="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg transition">Remover</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById("btn-cancel-del").onclick = () =>
+              modal.remove();
+            document.getElementById("btn-confirm-del").onclick = async () => {
+              modal.remove();
               try {
-                await updateDoc(doc(db, "users", e.currentTarget.dataset.id), {
+                await updateDoc(doc(db, "users", walkerId), {
                   managerId: null,
                   isActive: false,
                 });
-                toastService.success("Walker removido.");
+                toastService.success("Walker removido com sucesso.");
               } catch (err) {
                 toastService.error(err.message);
               }
-            }
+            };
           });
         });
       });
       unsubscribeListeners.push(unsubTeam);
+    };
+
+    const renderFinance = async () => {
+      mainContent.innerHTML = `
+            <div class="p-6 md:p-10 max-w-7xl mx-auto animate-fade-in">
+                <header class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-900">Financeiro</h2>
+                    <p class="text-gray-500">Gerencie solicitações de recarga de saldo dos tutores.</p>
+                </header>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div class="p-6 border-b border-gray-100 bg-gray-50/50">
+                        <h3 class="font-bold text-gray-800">Solicitações Pendentes</h3>
+                    </div>
+                    <div id="deposits-list" class="divide-y divide-gray-100">
+                        <p class="p-10 text-center text-gray-400">Carregando...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+      const qDeposits = query(
+        collection(db, "wallet_transactions"),
+        where("managerId", "==", user.uid),
+        where("status", "==", "pending"),
+        orderBy("createdAt", "desc")
+      );
+
+      const unsubDeposits = onSnapshot(qDeposits, async (snap) => {
+        const list = document.getElementById("deposits-list");
+        if (!list) return;
+
+        if (snap.empty) {
+          list.innerHTML =
+            '<div class="p-10 text-center text-gray-400">Nenhuma solicitação pendente.</div>';
+          return;
+        }
+
+        // Precisamos buscar os nomes dos tutores
+        const items = await Promise.all(
+          snap.docs.map(async (d) => {
+            const data = d.data();
+            const userSnap = await getDoc(doc(db, "users", data.tutorId));
+            const userName = userSnap.exists()
+              ? userSnap.data().name
+              : "Desconhecido";
+            return { id: d.id, ...data, userName };
+          })
+        );
+
+        list.innerHTML = items
+          .map(
+            (item) => `
+                <div class="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-gray-50 transition">
+                    <div>
+                        <p class="font-bold text-gray-900 text-lg">R$ ${item.amount.toFixed(
+                          2
+                        )}</p>
+                        <p class="text-sm text-gray-500">Solicitado por <strong>${
+                          item.userName
+                        }</strong></p>
+                        <p class="text-xs text-gray-400">${new Date(
+                          item.createdAt.seconds * 1000
+                        ).toLocaleString()}</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="window.rejectDeposit('${
+                          item.id
+                        }')" class="px-4 py-2 border border-red-200 text-red-600 rounded-xl font-bold text-sm hover:bg-red-50 transition">Rejeitar</button>
+                        <button onclick="window.approveDeposit('${
+                          item.id
+                        }')" class="px-6 py-2 bg-green-600 text-white rounded-xl font-bold text-sm hover:bg-green-700 shadow-lg transition">Aprovar Recarga</button>
+                    </div>
+                </div>
+            `
+          )
+          .join("");
+      });
+
+      window.approveDeposit = async (id) => {
+        if (confirm("Confirmar recebimento do PIX e liberar saldo?")) {
+          await dbService.approveDeposit(id);
+          toastService.success("Saldo liberado!");
+        }
+      };
+      window.rejectDeposit = async (id) => {
+        if (confirm("Rejeitar solicitação?")) await dbService.rejectDeposit(id);
+      };
+
+      unsubscribeListeners.push(unsubDeposits);
     };
 
     const renderBilling = async () => {
@@ -650,7 +911,7 @@ export default {
                     </div>
 
                     <div class="space-y-4">
-                        <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl text-left flex items-center justify-between group cursor-pointer hover:bg-blue-100 transition" onclick="navigator.clipboard.writeText('${ownerPix}'); alert('Chave PIX copiada!')">
+                        <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl text-left flex items-center justify-between group cursor-pointer hover:bg-blue-100 transition" id="btn-copy-pix">
                             <div>
                                 <p class="text-[10px] text-blue-800 uppercase font-bold">Chave PIX (CNPJ)</p>
                                 <p class="text-blue-900 font-mono text-sm font-bold truncate max-w-[200px]">${ownerPix}</p>
@@ -665,6 +926,11 @@ export default {
                     </div>
                 </div>
             </div>`;
+
+      document.getElementById("btn-copy-pix")?.addEventListener("click", () => {
+        navigator.clipboard.writeText(ownerPix);
+        toastService.success("Chave PIX copiada para a área de transferência!");
+      });
     };
 
     // --- Tab Logic ---
@@ -706,6 +972,7 @@ export default {
 
       if (tab === "dashboard") await renderDashboard();
       if (tab === "team") await renderTeam();
+      if (tab === "finance") await renderFinance();
       if (tab === "billing") await renderBilling();
     };
 
@@ -715,26 +982,24 @@ export default {
 
     // PWA Logic
     const installBtn = document.getElementById("btn-install-pwa-manager");
-    if (window.deferredPrompt) {
-      installBtn.classList.remove("hidden");
-    }
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      window.deferredPrompt = e;
+
+    const cleanupPwa = pwaService.onInstallable(() => {
       installBtn.classList.remove("hidden");
     });
+
     installBtn.addEventListener("click", async () => {
-      if (!window.deferredPrompt) return;
-      window.deferredPrompt.prompt();
-      const { outcome } = await window.deferredPrompt.userChoice;
-      if (outcome === "accepted") installBtn.classList.add("hidden");
-      window.deferredPrompt = null;
+      const installed = await pwaService.promptInstall();
+      if (installed) installBtn.classList.add("hidden");
     });
 
     await switchTab("dashboard");
 
     return () => {
       unsubscribeListeners.forEach((u) => u());
+      window.approveDeposit = null;
+      window.rejectDeposit = null;
+      sosAudio.pause();
+      cleanupPwa();
     };
   },
 };

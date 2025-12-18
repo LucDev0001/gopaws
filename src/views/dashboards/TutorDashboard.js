@@ -12,6 +12,8 @@ import { walkService } from "../../services/walkService.js";
 import { dbService } from "../../services/dbService.js";
 import { toastService } from "../../utils/toastService.js";
 import { pricingService } from "../../utils/pricingService.js";
+import { pwaService } from "../../services/pwaService.js";
+import { PaymentModal } from "../../components/PaymentModal.js";
 
 export default {
   async render(container, user) {
@@ -19,11 +21,15 @@ export default {
     let unsubscribeMessages = null;
     let searchTimeout = null;
     let map = null;
+    let unsubscribeWalkers = null;
+    let unsubscribeUser = null;
+    let unsubscribeTransactions = null;
 
     // 1. Buscar Pets e Dados
     let pets = [];
     let recentWalks = [];
     let activeWalk = null;
+    let walletBalance = user.balance || 0;
 
     try {
       pets = await dbService.getUserPets(user.uid);
@@ -31,7 +37,7 @@ export default {
       activeWalk = allWalks.find((w) =>
         ["accepted", "ongoing"].includes(w.status)
       );
-      recentWalks = allWalks.slice(0, 4); // Aumentei para 4 para preencher melhor a tela
+      recentWalks = allWalks; // Carrega todos para filtrar localmente
     } catch (error) {
       console.error(error);
     }
@@ -63,6 +69,34 @@ export default {
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 
                 <div class="lg:col-span-7 space-y-6">
+                    
+                    <!-- CARTEIRA DIGITAL -->
+                    <div class="bg-gray-900 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10"></div>
+                        <div class="relative z-10 flex justify-between items-start">
+                            <div>
+                                <p class="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Meu Saldo GoPaws</p>
+                                <h2 class="text-4xl font-bold tracking-tight">R$ <span id="wallet-balance">${walletBalance
+                                  .toFixed(2)
+                                  .replace(".", ",")}</span></h2>
+                            </div>
+                            <div class="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-xl">💳</div>
+                        </div>
+                        
+                        <div class="mt-6 flex gap-3">
+                            <button id="btn-add-funds" class="flex-1 bg-white text-black py-3 rounded-xl font-bold text-sm hover:bg-gray-100 transition shadow-lg flex items-center justify-center gap-2">
+                                <span>➕</span> Adicionar Saldo
+                            </button>
+                            <button id="btn-history" class="px-4 py-3 bg-gray-800 text-white rounded-xl font-bold text-sm hover:bg-gray-700 transition">
+                                📜
+                            </button>
+                        </div>
+                        
+                        <!-- Área de Recarga (Hidden) -->
+                        <div id="recharge-area" class="hidden mt-6 pt-6 border-t border-gray-800 animate-fade-in">
+                            <!-- Injetado via JS -->
+                        </div>
+                    </div>
                     
                     <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
                         <div class="flex justify-between items-center mb-4">
@@ -123,6 +157,8 @@ export default {
                                                     p.name
                                                   }" data-photo="${
                                                     p.photoUrl || ""
+                                                  }" data-observations="${
+                                                    p.observations || ""
                                                   }">${p.name}</option>`
                                               )
                                               .join("")}
@@ -190,63 +226,15 @@ export default {
                             <span>📜</span> Últimos Passeios
                         </h3>
                         
-                        <div class="space-y-4">
-                            ${
-                              recentWalks.length > 0
-                                ? recentWalks
-                                    .map(
-                                      (w) => `
-                                <div class="group bg-gray-50 hover:bg-white hover:shadow-md p-4 rounded-2xl border border-gray-100 transition-all duration-200 cursor-pointer" onclick="window.location.hash='/summary?id=${
-                                  w.id
-                                }'">
-                                    <div class="flex justify-between items-start mb-3">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-lg shadow-sm border border-gray-100">🐕</div>
-                                            <div>
-                                                <p class="font-bold text-gray-800 text-sm">${
-                                                  w.dogName
-                                                }</p>
-                                                <p class="text-xs text-gray-500">${
-                                                  w.createdAt
-                                                    ? new Date(
-                                                        w.createdAt.seconds *
-                                                          1000
-                                                      ).toLocaleDateString()
-                                                    : ""
-                                                }</p>
-                                            </div>
-                                        </div>
-                                        <span class="text-[10px] font-bold ${
-                                          w.status === "completed"
-                                            ? "text-green-600 bg-green-100"
-                                            : "text-orange-600 bg-orange-100"
-                                        } px-2 py-1 rounded-full uppercase tracking-wide">
-                                            ${
-                                              w.status === "completed"
-                                                ? "Concluído"
-                                                : w.status
-                                            }
-                                        </span>
-                                    </div>
-                                    <div class="flex justify-between items-center border-t border-gray-200 pt-3 mt-2">
-                                        <span class="text-xs text-gray-500 font-medium">${
-                                          w.duration
-                                        } min</span>
-                                        <button class="btn-reschedule text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition flex items-center gap-1" data-petid="${
-                                          w.dogId
-                                        }" data-duration="${w.duration}">
-                                            <span>↺</span> Reagendar
-                                        </button>
-                                    </div>
-                                </div>
-                            `
-                                    )
-                                    .join("")
-                                : `<div class="text-center py-10">
-                                <div class="text-3xl mb-2 opacity-30">📅</div>
-                                <p class="text-gray-400 text-sm">Seu histórico aparecerá aqui.</p>
-                             </div>`
-                            }
+                        <div class="flex gap-2 mb-4">
+                             <input type="text" id="t-history-filter" placeholder="Buscar walker..." class="w-full px-3 py-2 bg-gray-50 rounded-lg text-xs border border-gray-200">
+                        </div>
+                        
+                        <div class="space-y-4" id="tutor-history-container">
+                            <!-- Renderizado via JS abaixo -->
+                        </div>
+                        <div class="mt-4 text-center">
+                            <button id="t-load-more" class="text-xs font-bold text-blue-600 hover:underline hidden">Ver Mais</button>
                         </div>
                     </div>
                 </div>
@@ -278,7 +266,19 @@ export default {
                     if (!initialLoad && messages.length > msgCount) {
                       const lastMsg = messages[messages.length - 1];
                       if (lastMsg.senderId !== user.uid) {
+                        // Toast Interno
                         toastService.info(`💬 Nova mensagem: ${lastMsg.text}`);
+
+                        // Notificação do Sistema (Push Local)
+                        if (
+                          Notification.permission === "granted" &&
+                          document.hidden
+                        ) {
+                          new Notification("Nova mensagem do Walker", {
+                            body: lastMsg.text,
+                            icon: "/favicon.ico", // ou icone do app
+                          });
+                        }
                       }
                     }
                     msgCount = messages.length;
@@ -292,6 +292,292 @@ export default {
     `;
 
     // --- LÓGICA DE FUNCIONAMENTO (Mantida Original) ---
+
+    // --- LISTENERS DE SALDO E TRANSAÇÕES (REAL-TIME) ---
+
+    // 1. Atualizar Saldo na UI em tempo real
+    unsubscribeUser = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const bal = data.balance || 0;
+        walletBalance = bal; // Atualiza variável local para validação de pagamento
+
+        const balanceEl = document.getElementById("wallet-balance");
+        if (balanceEl) balanceEl.innerText = bal.toFixed(2).replace(".", ",");
+      }
+    });
+
+    // 2. Notificar quando recarga for aprovada
+    const qTrans = query(
+      collection(db, "wallet_transactions"),
+      where("tutorId", "==", user.uid)
+    );
+    unsubscribeTransactions = onSnapshot(qTrans, (snap) => {
+      snap.docChanges().forEach((change) => {
+        const data = change.doc.data();
+        // Se o status mudou para 'completed' (Aprovado pelo Manager)
+        if (change.type === "modified" && data.status === "completed") {
+          toastService.success(
+            `💰 Recarga de R$ ${data.amount.toFixed(2)} aprovada!`
+          );
+
+          // Notificação de Sistema (Background)
+          if (Notification.permission === "granted" && document.hidden) {
+            new Notification("Recarga Aprovada", {
+              body: `Seu saldo de R$ ${data.amount.toFixed(
+                2
+              )} já está disponível.`,
+              icon: "/favicon.ico",
+            });
+          }
+        }
+      });
+    });
+
+    // --- LÓGICA DA CARTEIRA ---
+    const btnAddFunds = document.getElementById("btn-add-funds");
+    const rechargeArea = document.getElementById("recharge-area");
+
+    btnAddFunds.addEventListener("click", async () => {
+      // Busca pricing para saber valor mínimo (1 passeio)
+      const pricing = await dbService.getPricing(); // MVP: Pega do primeiro manager
+
+      // Regra: Se saldo <= 0, exige recarga cheia (32). Se tem saldo, permite completar (min 1).
+      const minVal = walletBalance <= 0 ? 32 : 1;
+
+      // Sugestões de botões adaptáveis
+      const sug1 = walletBalance <= 0 ? 32 : 10;
+      const sug2 = walletBalance <= 0 ? 50 : 20;
+      const sug3 = walletBalance <= 0 ? 100 : 50;
+
+      rechargeArea.classList.toggle("hidden");
+      if (!rechargeArea.classList.contains("hidden")) {
+        rechargeArea.innerHTML = `
+                <p class="text-sm text-gray-400 mb-3">Selecione um valor para recarga:</p>
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <button class="btn-amount bg-gray-800 hover:bg-gray-700 py-2 rounded-lg text-sm font-bold transition" data-val="${sug1}">R$ ${sug1}</button>
+                    <button class="btn-amount bg-gray-800 hover:bg-gray-700 py-2 rounded-lg text-sm font-bold transition" data-val="${sug2}">R$ ${sug2}</button>
+                    <button class="btn-amount bg-gray-800 hover:bg-gray-700 py-2 rounded-lg text-sm font-bold transition" data-val="${sug3}">R$ ${sug3}</button>
+                </div>
+                <div class="flex gap-2 mb-4">
+                    <input type="number" id="custom-amount" placeholder="Outro valor (Mín R$ ${minVal})" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500">
+                </div>
+                <button id="btn-confirm-recharge" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg transition">
+                    Gerar PIX de Recarga
+                </button>
+            `;
+
+        let selectedAmount = 0;
+
+        rechargeArea.querySelectorAll(".btn-amount").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document.getElementById("custom-amount").value = "";
+            selectedAmount = Number(btn.dataset.val);
+            // Visual feedback
+            rechargeArea
+              .querySelectorAll(".btn-amount")
+              .forEach((b) => b.classList.remove("ring-2", "ring-green-500"));
+            btn.classList.add("ring-2", "ring-green-500");
+          });
+        });
+
+        document
+          .getElementById("custom-amount")
+          .addEventListener("input", (e) => {
+            selectedAmount = Number(e.target.value);
+            rechargeArea
+              .querySelectorAll(".btn-amount")
+              .forEach((b) => b.classList.remove("ring-2", "ring-green-500"));
+          });
+
+        document
+          .getElementById("btn-confirm-recharge")
+          .addEventListener("click", async () => {
+            if (selectedAmount < minVal)
+              return toastService.error(`Valor mínimo: R$ ${minVal}`);
+
+            // 1. Buscar dados do Manager (Pet Shop) para pegar o PIX
+            // MVP: Pega o primeiro manager disponível ou um fixo
+            const managers = await dbService.getAllManagers();
+            if (managers.length === 0)
+              return toastService.error(
+                "Nenhum Pet Shop disponível para recarga."
+              );
+            const manager = managers[0]; // MVP
+
+            // 2. Mostrar Modal de Pagamento (Reutilizando PaymentModal)
+            const modalHtml = PaymentModal.getHtml(
+              manager.pixKey,
+              manager.whatsappNumber,
+              selectedAmount
+            );
+            const modalContainer = document.createElement("div");
+            modalContainer.innerHTML = modalHtml;
+            document.body.appendChild(modalContainer);
+            PaymentModal.init();
+
+            // Ajustar texto do modal para contexto de recarga
+            const modalTitle = modalContainer.querySelector("h2");
+            const modalDesc = modalContainer.querySelector("p.text-gray-500");
+            if (modalTitle) modalTitle.innerText = "Recarga de Saldo";
+            if (modalDesc)
+              modalDesc.innerText =
+                "Faça o PIX e envie o comprovante para liberação.";
+
+            // 3. Criar Intenção de Depósito no Firestore
+            try {
+              await dbService.createDepositRequest(
+                user.uid,
+                manager.id,
+                selectedAmount
+              );
+              rechargeArea.classList.add("hidden");
+            } catch (e) {
+              console.error(e);
+              toastService.error("Erro ao criar solicitação.");
+            }
+          });
+      }
+    });
+
+    // Histórico
+    document
+      .getElementById("btn-history")
+      .addEventListener("click", async () => {
+        const history = await dbService.getWalletHistory(user.uid);
+        let html = `<div class="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center p-4"><div class="bg-white rounded-2xl p-6 max-w-md w-full max-h-[80vh] overflow-y-auto"><h3 class="font-bold text-lg mb-4">Histórico</h3><div class="space-y-3">`;
+
+        if (history.length === 0)
+          html += `<p class="text-gray-400 text-sm">Sem transações.</p>`;
+
+        history.forEach((h) => {
+          const color =
+            h.status === "completed"
+              ? "text-green-600"
+              : h.status === "pending"
+              ? "text-yellow-600"
+              : "text-red-600";
+          const icon = h.type === "deposit" ? "📥" : "📤";
+          html += `<div class="flex justify-between items-center border-b border-gray-100 pb-2"><div class="flex items-center gap-2"><span>${icon}</span><div><p class="font-bold text-sm capitalize">${
+            h.type === "deposit" ? "Recarga" : "Pagamento"
+          }</p><p class="text-xs text-gray-400">${new Date(
+            h.createdAt.seconds * 1000
+          ).toLocaleDateString()}</p></div></div><div class="text-right"><p class="font-bold ${color}">R$ ${
+            h.amount
+          }</p><p class="text-[10px] uppercase font-bold ${color}">${
+            h.status
+          }</p></div></div>`;
+        });
+
+        html += `</div><button class="mt-4 w-full bg-gray-100 py-3 rounded-xl font-bold" onclick="this.parentElement.parentElement.remove()">Fechar</button></div></div>`;
+        const el = document.createElement("div");
+        el.innerHTML = html;
+        document.body.appendChild(el);
+      });
+
+    // --- Lógica de Histórico Tutor (Renderização Dinâmica) ---
+    const historyContainer = document.getElementById("tutor-history-container");
+    const historyFilter = document.getElementById("t-history-filter");
+    const btnLoadMore = document.getElementById("t-load-more");
+    let historyLimit = 4;
+
+    const renderTutorHistory = () => {
+      const term = historyFilter.value.toLowerCase();
+      const filtered = recentWalks.filter((w) =>
+        (w.walkerName || "").toLowerCase().includes(term)
+      );
+      const visible = filtered.slice(0, historyLimit);
+
+      if (visible.length === 0) {
+        historyContainer.innerHTML = `<div class="text-center py-10"><div class="text-3xl mb-2 opacity-30">📅</div><p class="text-gray-400 text-sm">Nenhum passeio encontrado.</p></div>`;
+      } else {
+        historyContainer.innerHTML = visible
+          .map(
+            (w) => `
+                <div class="group bg-gray-50 hover:bg-white hover:shadow-md p-4 rounded-2xl border border-gray-100 transition-all duration-200 cursor-pointer relative" onclick="window.location.hash='/summary?id=${
+                  w.id
+                }'">
+                    <button onclick="event.stopPropagation(); window.deleteWalkTutor('${
+                      w.id
+                    }')" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 p-1">🗑️</button>
+                    <div class="flex justify-between items-start mb-3 pr-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-lg shadow-sm border border-gray-100">🐕</div>
+                            <div>
+                                <p class="font-bold text-gray-800 text-sm">${
+                                  w.dogName
+                                }</p>
+                                <p class="text-xs text-gray-500">${
+                                  w.createdAt
+                                    ? new Date(
+                                        w.createdAt.seconds * 1000
+                                      ).toLocaleDateString()
+                                    : ""
+                                }</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] font-bold ${
+                          w.status === "completed"
+                            ? "text-green-600 bg-green-100"
+                            : "text-orange-600 bg-orange-100"
+                        } px-2 py-1 rounded-full uppercase tracking-wide">${
+              w.status === "completed" ? "Concluído" : w.status
+            }</span>
+                    </div>
+                    <div class="flex justify-between items-center border-t border-gray-200 pt-3 mt-2">
+                        <span class="text-xs text-gray-500 font-medium">${
+                          w.duration
+                        } min</span>
+                        <button class="btn-reschedule text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded transition flex items-center gap-1" data-petid="${
+                          w.dogId
+                        }" data-duration="${w.duration}">
+                            <span>↺</span> Reagendar
+                        </button>
+                    </div>
+                </div>
+            `
+          )
+          .join("");
+      }
+
+      if (historyLimit >= filtered.length) btnLoadMore.classList.add("hidden");
+      else btnLoadMore.classList.remove("hidden");
+    };
+
+    historyFilter.addEventListener("input", renderTutorHistory);
+    btnLoadMore.addEventListener("click", () => {
+      historyLimit += 4;
+      renderTutorHistory();
+    });
+
+    window.deleteWalkTutor = async (id) => {
+      const modal = document.createElement("div");
+      modal.className =
+        "fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in";
+      modal.innerHTML = `
+            <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+                <h3 class="font-bold text-lg text-gray-900 mb-2">Ocultar Passeio?</h3>
+                <p class="text-gray-500 text-sm mb-6">Este registro será removido da sua visualização de histórico.</p>
+                <div class="flex gap-3">
+                    <button id="btn-cancel-hist" class="flex-1 py-3 rounded-xl font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">Cancelar</button>
+                    <button id="btn-confirm-hist" class="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg transition">Ocultar</button>
+                </div>
+            </div>
+        `;
+      document.body.appendChild(modal);
+
+      document.getElementById("btn-cancel-hist").onclick = () => modal.remove();
+      document.getElementById("btn-confirm-hist").onclick = async () => {
+        modal.remove();
+        await dbService.hideWalkHistory(id, "tutor");
+        const idx = recentWalks.findIndex((w) => w.id === id);
+        if (idx > -1) recentWalks.splice(idx, 1);
+        renderTutorHistory();
+        toastService.success("Histórico atualizado.");
+      };
+    };
+
+    renderTutorHistory();
 
     // Lógica de Preço
     const durationSelect = document.getElementById("duration-select");
@@ -362,22 +648,97 @@ export default {
           id: petSelect.value,
           name: selectedOption.dataset.name,
           photo: selectedOption.dataset.photo,
+          observations: selectedOption.dataset.observations, // Captura observações
           estimatedPrice: updatePrice(),
           duration: parseInt(durationSelect.value),
         };
 
-        btn.disabled = true;
-        btn.innerHTML = `<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> Iniciando...`;
+        // --- SELEÇÃO DE PAGAMENTO ---
+        const hasBalance = walletBalance >= petData.estimatedPrice;
 
-        try {
-          const requestId = await walkService.createRequest(
-            petData,
-            "Localização Atual (GPS)"
-          );
+        const paymentModal = document.createElement("div");
+        paymentModal.className =
+          "fixed inset-0 bg-black/60 z-[2000] flex items-end md:items-center justify-center p-4 animate-fade-in";
+        paymentModal.innerHTML = `
+            <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-slide-up">
+                <h3 class="font-bold text-xl text-gray-900 mb-2">Forma de Pagamento</h3>
+                <p class="text-gray-500 text-sm mb-6">Como deseja pagar por este passeio?</p>
+                
+                <div class="space-y-3">
+                    <button class="w-full p-4 rounded-xl border ${
+                      hasBalance
+                        ? "border-gray-200 hover:border-black cursor-pointer"
+                        : "border-gray-100 bg-gray-50 cursor-not-allowed opacity-60"
+                    } flex items-center justify-between transition group" ${
+          hasBalance
+            ? "onclick=\"window.confirmPaymentMethod('balance')\""
+            : "disabled"
+        }>
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 ${
+                              hasBalance ? "bg-gray-900" : "bg-gray-400"
+                            } text-white rounded-full flex items-center justify-center text-lg">💳</div>
+                            <div class="text-left">
+                                <p class="font-bold ${
+                                  hasBalance ? "text-gray-900" : "text-gray-400"
+                                }">Saldo GoPaws</p>
+                                <p class="text-xs ${
+                                  hasBalance
+                                    ? "text-gray-500"
+                                    : "text-red-500 font-bold"
+                                }">Disponível: R$ ${walletBalance.toFixed(2)} ${
+          !hasBalance ? "(Insuficiente)" : ""
+        }</p>
+                            </div>
+                        </div>
+                        ${
+                          hasBalance
+                            ? '<div class="w-5 h-5 rounded-full border-2 border-gray-300 group-hover:border-black"></div>'
+                            : ""
+                        }
+                    </button>
 
-          // UI: Esconde Form, Mostra Loading Bonito
-          card.classList.add("hidden");
-          statusArea.innerHTML = `
+                    <button class="w-full p-4 rounded-xl border border-gray-200 flex items-center justify-between hover:border-blue-500 transition group" onclick="window.confirmPaymentMethod('pix')">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-lg">💠</div>
+                            <div class="text-left"><p class="font-bold text-gray-900">PIX</p><p class="text-xs text-gray-500">Pagar ao finalizar</p></div>
+                        </div>
+                    </button>
+                    
+                    <button class="w-full p-4 rounded-xl border border-gray-200 flex items-center justify-between hover:border-green-500 transition group" onclick="window.confirmPaymentMethod('cash')">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-lg">💵</div>
+                            <div class="text-left"><p class="font-bold text-gray-900">Dinheiro / Cartão</p><p class="text-xs text-gray-500">Direto ao Walker</p></div>
+                        </div>
+                    </button>
+                </div>
+                <button class="mt-6 w-full py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl" onclick="this.parentElement.parentElement.remove()">Cancelar</button>
+            </div>
+        `;
+        document.body.appendChild(paymentModal);
+
+        window.confirmPaymentMethod = async (method) => {
+          paymentModal.remove();
+
+          if (method === "balance" && walletBalance < petData.estimatedPrice) {
+            return toastService.error(
+              "Saldo insuficiente. Recarregue sua carteira."
+            );
+          }
+
+          btn.disabled = true;
+          btn.innerHTML = `<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> Iniciando...`;
+
+          try {
+            const requestId = await walkService.createRequest(
+              petData,
+              user.address || "Endereço não informado",
+              method
+            );
+
+            // UI: Esconde Form, Mostra Loading Bonito
+            card.classList.add("hidden");
+            statusArea.innerHTML = `
                   <div class="bg-white rounded-3xl p-8 shadow-lg border border-gray-100 text-center animate-fade-in relative overflow-hidden">
                       <div class="absolute inset-0 bg-blue-50/50 animate-pulse"></div>
                       <div class="relative z-10">
@@ -395,9 +756,9 @@ export default {
                   </div>
               `;
 
-          // TIMER
-          searchTimeout = setTimeout(() => {
-            statusArea.innerHTML = `
+            // TIMER
+            searchTimeout = setTimeout(() => {
+              statusArea.innerHTML = `
                     <div class="bg-white p-8 rounded-3xl shadow-sm text-center animate-fade-in border border-red-100">
                         <div class="text-5xl mb-4">⏳</div>
                         <h3 class="font-bold text-xl text-gray-900 mb-2">Tempo esgotado</h3>
@@ -408,61 +769,72 @@ export default {
                         </div>
                     </div>
                  `;
-            document.getElementById("btn-retry-no").onclick = async () => {
+              document.getElementById("btn-retry-no").onclick = async () => {
+                await deleteDoc(doc(db, "open_requests", requestId));
+                resetSearchUI();
+              };
+              document.getElementById("btn-retry-yes").onclick = () =>
+                resetSearchUI(true); // true = manter loading se fosse retry, mas aqui vamos resetar para simplificar
+            }, 60000);
+
+            // Cancelar
+            document.getElementById("btn-cancel-search").onclick = async () => {
+              clearTimeout(searchTimeout);
               await deleteDoc(doc(db, "open_requests", requestId));
-              window.location.reload();
+              resetSearchUI();
             };
-            document.getElementById("btn-retry-yes").onclick = () =>
-              window.location.reload();
-          }, 60000);
 
-          // Cancelar
-          document.getElementById("btn-cancel-search").onclick = async () => {
-            clearTimeout(searchTimeout);
-            await deleteDoc(doc(db, "open_requests", requestId));
-            window.location.reload();
-          };
+            // Função para resetar a UI sem recarregar a página
+            const resetSearchUI = (retry = false) => {
+              if (unsubscribeWaiting) unsubscribeWaiting();
+              if (searchTimeout) clearTimeout(searchTimeout);
 
-          // Monitorar
-          unsubscribeWaiting = onSnapshot(
-            doc(db, "open_requests", requestId),
-            async (docSnap) => {
-              if (!docSnap.exists()) return;
-              const data = docSnap.data();
-              if (data.status === "accepted" && data.walkId) {
-                clearTimeout(searchTimeout);
-                toastService.success("Walker encontrado!");
-                window.location.hash = `/walk?id=${data.walkId}`;
+              if (!retry) {
+                card.classList.remove("hidden");
+                statusArea.innerHTML = "";
+                btn.disabled = false;
+                btn.innerHTML = `<span>Buscar Passeador</span><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>`;
+              } else {
+                // Se fosse retry, poderia chamar o click do botão novamente,
+                // mas por segurança vamos resetar para o usuário clicar de novo.
+                window.location.reload();
               }
-            }
-          );
-        } catch (e) {
-          toastService.error("Erro: " + e.message);
-          btn.disabled = false;
-          btn.textContent = "Solicitar Passeio";
-          card.classList.remove("hidden");
-        }
+            };
+
+            // Monitorar
+            unsubscribeWaiting = onSnapshot(
+              doc(db, "open_requests", requestId),
+              async (docSnap) => {
+                if (!docSnap.exists()) return;
+                const data = docSnap.data();
+                if (data.status === "accepted" && data.walkId) {
+                  clearTimeout(searchTimeout);
+                  toastService.success("Walker encontrado!");
+                  window.location.hash = `/walk?id=${data.walkId}`;
+                }
+              }
+            );
+          } catch (e) {
+            toastService.error("Erro: " + e.message);
+            btn.disabled = false;
+            btn.textContent = "Solicitar Passeio";
+            card.classList.remove("hidden");
+          }
+        };
+        // Fim da lógica de seleção
       });
     }
 
     // --- PWA INSTALL LOGIC (DASHBOARD) ---
     const installBtn = document.getElementById("btn-install-pwa-dash");
-    // Verifica se o evento já foi disparado anteriormente e salvo no window (caso venha da Landing)
-    // ou aguarda novo evento
-    if (window.deferredPrompt) {
-      installBtn.classList.remove("hidden");
-    }
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      window.deferredPrompt = e;
+
+    const cleanupPwa = pwaService.onInstallable(() => {
       installBtn.classList.remove("hidden");
     });
+
     installBtn.addEventListener("click", async () => {
-      if (!window.deferredPrompt) return;
-      window.deferredPrompt.prompt();
-      const { outcome } = await window.deferredPrompt.userChoice;
-      if (outcome === "accepted") installBtn.classList.add("hidden");
-      window.deferredPrompt = null;
+      const installed = await pwaService.promptInstall();
+      if (installed) installBtn.classList.add("hidden");
     });
 
     // --- INICIALIZAÇÃO DO MAPA DE WALKERS ---
@@ -490,6 +862,8 @@ export default {
           }
         ).addTo(map);
 
+        const walkerMarkers = {}; // Armazena marcadores para atualizar/remover
+
         // Pegar Localização Real
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
@@ -509,14 +883,22 @@ export default {
                 collection(db, "users"),
                 where("role", "==", "walker")
               );
-              const querySnapshot = await getDocs(q);
 
-              querySnapshot.forEach((doc) => {
-                const wData = doc.data();
-                // Simulação de localização próxima para MVP (já que nem todos têm lastLocation salvo)
-                // Em produção, usaríamos wData.lastLocation
-                if (wData.isActive !== false) {
-                  const isFav = (user.favorites || []).includes(doc.id);
+              unsubscribeWalkers = onSnapshot(q, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                  const wData = change.doc.data();
+                  const wId = change.doc.id;
+
+                  if (change.type === "removed" || wData.isActive === false) {
+                    if (walkerMarkers[wId]) {
+                      map.removeLayer(walkerMarkers[wId]);
+                      delete walkerMarkers[wId];
+                    }
+                    return;
+                  }
+
+                  // Adicionar ou Atualizar (Se estiver ativo)
+                  const isFav = (user.favorites || []).includes(wId);
                   const rating = wData.rating || 5.0;
 
                   const markerHtml = `
@@ -555,13 +937,25 @@ export default {
                     iconAnchor: [40, 40],
                   });
 
-                  // Gera um offset aleatório pequeno para simular walkers na região
-                  const latOffset = (Math.random() - 0.5) * 0.01;
-                  const lngOffset = (Math.random() - 0.5) * 0.01;
-                  L.marker([latitude + latOffset, longitude + lngOffset], {
-                    icon: customIcon,
-                  }).addTo(map);
-                }
+                  // Posição Determinística (Baseada no ID para não pular no mapa ao atualizar)
+                  // Simula walkers próximos ao tutor
+                  const hash = wId
+                    .split("")
+                    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                  const latOffset = ((hash % 100) / 100 - 0.5) * 0.01;
+                  const lngOffset = (((hash * 13) % 100) / 100 - 0.5) * 0.01;
+                  const wLat = latitude + latOffset;
+                  const wLng = longitude + lngOffset;
+
+                  if (walkerMarkers[wId]) {
+                    walkerMarkers[wId].setLatLng([wLat, wLng]);
+                    walkerMarkers[wId].setIcon(customIcon);
+                  } else {
+                    walkerMarkers[wId] = L.marker([wLat, wLng], {
+                      icon: customIcon,
+                    }).addTo(map);
+                  }
+                });
               });
             } catch (e) {
               console.error("Erro ao carregar walkers no mapa", e);
@@ -578,10 +972,16 @@ export default {
       if (unsubscribeWaiting) unsubscribeWaiting();
       if (unsubscribeMessages) unsubscribeMessages();
       if (searchTimeout) clearTimeout(searchTimeout);
+      if (unsubscribeWalkers) unsubscribeWalkers();
+      if (unsubscribeUser) unsubscribeUser();
+      if (unsubscribeTransactions) unsubscribeTransactions();
       if (map) {
         map.remove();
         map = null;
       }
+      window.deleteWalkTutor = null;
+      window.confirmPaymentMethod = null;
+      cleanupPwa();
     };
   },
 };

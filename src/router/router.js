@@ -19,6 +19,19 @@ import WalkerProfile from "../views/profiles/WalkerProfile.js";
 
 import { auth } from "../services/firebase.js";
 
+// --- CONFIGURAÇÕES ---
+const ADMIN_UIDS = ["ozSeS2w168YYgQ3oriN0IDvt3sQ2"]; // Lista de Admins permitidos
+
+const PUBLIC_ROUTES = [
+  "/landing",
+  "/register-tutor",
+  "/register-manager",
+  "/login",
+  "/terms",
+  "/privacy",
+  "/install-ios",
+];
+
 const routes = {
   "/": Home,
   "/landing": Landing,
@@ -60,26 +73,14 @@ export const router = async () => {
 
   // 2.1 Admin Guard
   if (path === "/admin") {
-    const adminId = "ozSeS2w168YYgQ3oriN0IDvt3sQ2";
-    if (!user || user.uid !== adminId) {
+    if (!user || !ADMIN_UIDS.includes(user.uid)) {
       console.warn("Acesso de administrador negado.");
       return navigateTo("/"); // Redireciona não-admins
     }
   }
 
-  // Lista de rotas públicas (que não precisam de login)
-  const publicRoutes = [
-    "/landing",
-    "/register-tutor",
-    "/register-manager",
-    "/login",
-    "/terms",
-    "/privacy",
-    "/install-ios",
-  ];
-
   // Se não tem usuário e não é rota pública, manda pra landing/login
-  if (!user && !publicRoutes.includes(path) && path !== "/admin") {
+  if (!user && !PUBLIC_ROUTES.includes(path) && path !== "/admin") {
     return navigateTo("/landing");
   }
 

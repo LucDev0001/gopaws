@@ -14,19 +14,26 @@ import {
 
 export const walkService = {
   // TUTOR: Cria uma solicitação de passeio
-  async createRequest(petData, address) {
+  async createRequest(petData, address, paymentMethod) {
     const user = auth.currentUser;
     if (!user) throw new Error("Usuário não autenticado");
+
+    // Buscar dados do Tutor (Telefone) para salvar no pedido
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    const userData = userDoc.exists() ? userDoc.data() : {};
 
     const docRef = await addDoc(collection(db, "open_requests"), {
       tutorId: user.uid,
       tutorName: user.displayName || "Tutor",
+      tutorPhone: userData.phone || "Não informado", // Adicionado
       dogName: petData.name,
       dogPhoto: petData.photo,
       dogId: petData.id,
+      dogObservations: petData.observations || "Nenhuma", // Salva no banco
       price: petData.estimatedPrice,
       duration: petData.duration,
       address: address,
+      paymentMethod: paymentMethod, // 'balance', 'pix', 'cash', 'card'
       paymentStatus: "pending",
       status: "pending",
       createdAt: serverTimestamp(),

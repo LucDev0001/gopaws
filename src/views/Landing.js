@@ -1,4 +1,6 @@
 import { navigateTo } from "../router/router.js";
+import { pwaService } from "../services/pwaService.js";
+import { PushTest } from "../utils/pushTest.js";
 
 export default {
   getHtml() {
@@ -206,21 +208,11 @@ export default {
     navTo("btn-hero-manager", "/register-manager");
     navTo("btn-cta-manager", "/register-manager");
 
-    // --- PWA INSTALL LOGIC ---
-    // 1. Registrar Service Worker
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("./service-worker.js")
-        .then(() => console.log("Service Worker Registered"))
-        .catch((err) => console.error("SW Error:", err));
-    }
-
     // 2. Botão de Instalação
     const installBtn = document.getElementById("btn-install-pwa");
     const installCard = document.getElementById("pwa-install-card");
     const btnInstallAction = document.getElementById("btn-pwa-install-action");
     const btnCloseCard = document.getElementById("btn-close-pwa-card");
-    let deferredPrompt;
 
     // --- DETECÇÃO IOS ---
     const isIOS =
@@ -244,9 +236,8 @@ export default {
       // Por enquanto, vamos focar no botão da navbar para não ser intrusivo demais no iOS
     }
 
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
+    // --- LÓGICA CENTRALIZADA PWA ---
+    this.cleanupPwa = pwaService.onInstallable(() => {
       installBtn.classList.remove("hidden");
 
       // Mostrar card se não foi fechado anteriormente nesta sessão
@@ -258,14 +249,11 @@ export default {
     });
 
     const handleInstall = async () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") {
+      const installed = await pwaService.promptInstall();
+      if (installed) {
         installBtn.classList.add("hidden");
         installCard.classList.add("hidden");
       }
-      deferredPrompt = null;
     };
 
     installBtn.addEventListener("click", handleInstall);
@@ -275,5 +263,14 @@ export default {
       installCard.classList.add("hidden");
       sessionStorage.setItem("pwa-card-dismissed", "true");
     });
+
+    // --- DEBUG: Teste de Push ---
+    window.PushTest = PushTest;
+    console.log(
+      "🔧 DEBUG: Para testar Push, digite no console: window.PushTest.init()"
+    );
+  },
+  unmount() {
+    if (this.cleanupPwa) this.cleanupPwa();
   },
 };

@@ -1,7 +1,9 @@
-import { auth, db } from "../services/firebase.js";
+import { auth, db, messaging } from "../services/firebase.js";
 import { doc, getDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import { getToken, onMessage } from "firebase/messaging";
 import { toastService } from "../utils/toastService.js";
+import { dbService } from "../services/dbService.js";
 import ManagerDashboard from "./dashboards/ManagerDashboard.js";
 import WalkerDashboard from "./dashboards/WalkerDashboard.js";
 import TutorDashboard from "./dashboards/TutorDashboard.js";
@@ -42,6 +44,37 @@ export default {
     // Injeta o UID no objeto de dados para que os dashboards possam usá-lo
     const userData = { uid: user.uid, ...userDoc.data() };
     const container = document.getElementById("home-content");
+
+    // --- CONFIGURAÇÃO DE NOTIFICAÇÕES (AUTO) ---
+    try {
+      // 1. Solicita permissão e pega o token
+      if (Notification.permission !== "denied") {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          const swReg = await navigator.serviceWorker.ready;
+          const token = await getToken(messaging, {
+            vapidKey:
+              "BJyGNShirOxJHEZnL4YT3O0C8c9u3CMQxf1tjacs4R78xxnF_oue2GOyuYx-lXpU4BOfXUUauvfyQpPEVksyhYY",
+            serviceWorkerRegistration: swReg,
+          });
+
+          if (token) {
+            // Salva no Firestore para uso futuro (Cloud Functions)
+            await dbService.saveFCMToken(user.uid, token);
+          }
+        }
+      }
+
+      // 2. Listener para mensagens com o App ABERTO (Foreground)
+      onMessage(messaging, (payload) => {
+        console.log("Push recebido em foreground:", payload);
+        toastService.info(
+          `🔔 ${payload.notification.title}: ${payload.notification.body}`
+        );
+      });
+    } catch (err) {
+      console.warn("Erro ao configurar notificações:", err);
+    }
 
     if (userData.role === "walker") {
       currentDashboardUnmount = await WalkerDashboard.render(

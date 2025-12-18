@@ -1,45 +1,50 @@
 export default {
-  async getHtml() {
+  getHtml() {
     return `
-            <div class="flex flex-col h-full bg-gray-50">
-                <header class="p-4 border-b flex items-center gap-4 sticky top-0 bg-white z-10 shadow-sm">
-                    <button onclick="window.history.back()" class="text-gray-600 p-2 hover:bg-gray-100 rounded-full">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                        </svg>
-                    </button>
-                    <h1 class="text-xl font-bold text-gray-800">Termos de Uso</h1>
-                </header>
-                <div class="flex-1 overflow-y-auto p-8 prose max-w-none text-gray-700">
-                    <p>Última atualização: 16 de Dezembro de 2025</p>
+      <div class="min-h-screen bg-gray-50 p-6 font-sans">
+        <div class="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+            <header class="mb-8 border-b border-gray-100 pb-6">
+                <button onclick="window.history.back()" class="text-sm font-bold text-gray-500 hover:text-black mb-4">← Voltar</button>
+                <h1 class="text-3xl font-bold text-gray-900">Termos de Uso</h1>
+                <p class="text-gray-500 text-sm mt-2">Última atualização: 23 de Maio de 2024</p>
+            </header>
 
-                    <h2 class="text-lg font-bold text-gray-900 mt-4 mb-2">1. O Serviço GoPaws</h2>
-                    <p>O GoPaws ("Plataforma") é um software que conecta (i) donos de animais de estimação ("Tutores") e (ii) empresas de passeio de cães ("Gerentes" ou "Pet Shops") que empregam ou gerenciam passeadores profissionais ("Walkers"). O GoPaws atua como um intermediário tecnológico, fornecendo ferramentas de agendamento, rastreamento por GPS e comunicação.</p>
+            <div class="prose prose-sm max-w-none text-gray-600 space-y-6">
+                <section>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">1. Aceitação dos Termos</h3>
+                    <p>Ao acessar e usar o GoPaws, você concorda com estes termos. A plataforma conecta Tutores a Passeadores (Walkers) e Agências (Managers).</p>
+                </section>
 
-                    <h2 class="text-lg font-bold text-gray-900 mt-4 mb-2">2. Papéis e Responsabilidades</h2>
-                    <ul class="list-disc pl-5 space-y-2">
-                        <li><strong>Tutor:</strong> Você é responsável por fornecer informações precisas sobre seu pet, incluindo comportamento, saúde e necessidades especiais. Você concorda em realizar o pagamento diretamente ao Pet Shop ao final de cada serviço.</li>
-                        <li><strong>Gerente (Pet Shop):</strong> Você é responsável pela seleção, treinamento e verificação de seus Walkers. Você concorda em fornecer dados de pagamento (Chave PIX, WhatsApp) válidos para receber dos Tutores. Você também concorda com o pagamento de uma taxa de assinatura mensal para uso da plataforma, conforme descrito na aba "Assinatura".</li>
-                        <li><strong>Walker:</strong> Você é um agente do Gerente/Pet Shop. Você concorda em seguir as melhores práticas de segurança e bem-estar animal durante os passeios.</li>
-                    </ul>
+                <section>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">2. Carteira Digital e Saldo (GoPaws Wallet)</h3>
+                    <p><strong>2.1. Natureza do Saldo:</strong> Os créditos inseridos na plataforma ("Saldo GoPaws") são pré-pagamentos destinados exclusivamente à contratação de serviços de passeio dentro do aplicativo. O saldo não rende juros e não constitui conta bancária.</p>
+                    <p><strong>2.2. Recargas:</strong> As recargas são realizadas via PIX diretamente para a conta da Agência/Pet Shop parceira. A liberação do saldo ocorre mediante aprovação manual do Manager após conferência.</p>
+                    <p><strong>2.3. Reembolsos:</strong> O saldo não utilizado pode ser reembolsado mediante solicitação direta à Agência, sujeito a taxas administrativas de até 10% para cobrir custos operacionais. Saldos promocionais ou bônus não são reembolsáveis.</p>
+                </section>
 
-                    <h2 class="text-lg font-bold text-gray-900 mt-4 mb-2">3. Pagamentos e Assinaturas</h2>
-                    <p><strong>Pagamento do Passeio:</strong> O pagamento pelo serviço de passeio é uma transação direta entre o Tutor e o Pet Shop. O GoPaws exibe os dados de pagamento fornecidos pelo Pet Shop para facilitar a transação, mas não processa, armazena ou se responsabiliza por esses pagamentos.</p>
-                    <p><strong>Assinatura da Plataforma:</strong> Os Gerentes/Pet Shops concordam em pagar uma taxa de assinatura mensal para manter o acesso às ferramentas administrativas da plataforma. O não pagamento resultará na suspensão do acesso até a regularização. Os dados para pagamento da assinatura estão disponíveis no painel do Gerente.</p>
+                <section>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">3. Responsabilidades</h3>
+                    <p><strong>3.1. Do Tutor:</strong> Informar corretamente as condições de saúde e comportamento do animal (alergias, reatividade). Danos causados por omissão dessas informações são de responsabilidade do Tutor.</p>
+                    <p><strong>3.2. Do Walker:</strong> Zelar pela segurança do animal, cumprir o trajeto acordado e recolher dejetos. O uso do GPS é obrigatório durante o serviço.</p>
+                    <p><strong>3.3. Da Plataforma:</strong> O GoPaws atua como intermediário tecnológico e não se responsabiliza por atos diretos dos usuários, embora ofereça ferramentas de segurança (Rastreamento, SOS).</p>
+                </section>
 
-                    <h2 class="text-lg font-bold text-gray-900 mt-4 mb-2">4. Limitação de Responsabilidade</h2>
-                    <p>O GoPaws é uma plataforma de software (SaaS) e não se responsabiliza por incidentes que ocorram durante os passeios, incluindo, mas não se limitando a, acidentes, fugas, danos a propriedades ou interações entre animais. A responsabilidade civil e criminal por tais eventos recai sobre o Pet Shop contratado e seu Walker.</p>
+                <section>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">4. Cancelamento e No-Show</h3>
+                    <p>Cancelamentos feitos com menos de 1 hora de antecedência podem estar sujeitos a cobrança de taxa de deslocamento se o Walker já estiver a caminho.</p>
+                </section>
 
-                    <h2 class="text-lg font-bold text-gray-900 mt-4 mb-2">5. Coleta e Uso de Dados</h2>
-                    <p>Ao usar a plataforma, você concorda com a coleta e uso de suas informações conforme descrito em nossa <strong>Política de Privacidade</strong>. Isso inclui o rastreamento por GPS durante os passeios, que é uma funcionalidade essencial do serviço.</p>
-
-                    <h2 class="text-lg font-bold text-gray-900 mt-4 mb-2">6. Suspensão e Encerramento de Conta</h2>
-                    <p>Reservamo-nos o direito de suspender ou banir qualquer usuário (Tutor, Walker ou Gerente) que viole estes termos, pratique atividades fraudulentas ou coloque em risco a segurança e a integridade da comunidade GoPaws.</p>
-                </div>
+                <section>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">5. Uso de Imagem e Dados</h3>
+                    <p>Ao utilizar o serviço, você autoriza o envio de fotos do seu pet para relatórios de passeio. Dados de localização são coletados apenas durante a execução do serviço.</p>
+                </section>
             </div>
-        `;
-  },
-  async init() {
-    // Sem lógica complexa necessária aqui
+
+            <div class="mt-10 pt-6 border-t border-gray-100 text-center">
+                <p class="text-xs text-gray-400">GoPaws Inc. © 2024</p>
+            </div>
+        </div>
+      </div>
+    `;
   },
 };

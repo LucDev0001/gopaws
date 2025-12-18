@@ -4,10 +4,15 @@ import { toastService } from "../../utils/toastService.js";
 import { WalkRequestCard } from "../../components/WalkRequestCard.js";
 import { Wallet } from "../../components/Wallet.js";
 import { dbService } from "../../services/dbService.js";
+import { pwaService } from "../../services/pwaService.js";
 
 export default {
   async render(container, user) {
     let unsubscribeRequests = null;
+
+    // Audio Notificação
+    const notifAudio = new Audio("./src/assets/sounds/notification.mp3");
+    notifAudio.loop = true;
 
     // --- TELA DE ESPERA (PERFIL EM ANÁLISE) ---
     if (user.isVerified !== true) {
@@ -67,12 +72,18 @@ export default {
                         <h1 class="text-2xl font-bold text-gray-900 leading-tight">Olá, ${
                           user.name.split(" ")[0]
                         }! 🌿</h1>
-                        <div class="flex items-center gap-2 mt-1">
-                            <span class="relative flex h-3 w-3">
-                              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                              <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                            </span>
-                            <p class="text-gray-500 font-medium text-sm">Disponível para passeios</p>
+                        
+                        <!-- Toggle Online/Offline -->
+                        <div class="flex items-center gap-3 mt-2">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="toggle-online" class="sr-only peer" ${
+                                  user.isActive !== false ? "checked" : ""
+                                }>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                                <span class="ml-2 text-sm font-medium text-gray-700" id="status-text">${
+                                  user.isActive !== false ? "Online" : "Offline"
+                                }</span>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -103,6 +114,18 @@ export default {
                             <p class="text-gray-400">Buscando oportunidades próximas...</p>
                         </div>
                     </div>
+
+                    <!-- Histórico Walker (Adicionado) -->
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 mt-8">
+                        <h3 class="font-bold text-gray-800 mb-4">Histórico de Passeios</h3>
+                        <div class="flex gap-2 mb-4">
+                             <input type="text" id="w-history-filter" placeholder="Buscar pet..." class="w-full px-3 py-2 bg-gray-50 rounded-lg text-sm border border-gray-200">
+                        </div>
+                        <div id="walker-history-list" class="space-y-3"></div>
+                        <div class="mt-4 text-center">
+                            <button id="w-load-more" class="text-sm text-green-600 font-bold hover:underline">Carregar Mais</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -127,6 +150,31 @@ export default {
     `;
 
     // --- LÓGICA FUNCIONAL (Mantida Original) ---
+
+    // Lógica Toggle Online/Offline
+    const toggleBtn = document.getElementById("toggle-online");
+    const statusText = document.getElementById("status-text");
+
+    toggleBtn.addEventListener("change", async (e) => {
+      const isOnline = e.target.checked;
+      statusText.innerText = isOnline ? "Online" : "Offline";
+
+      // Hack para desbloquear áudio no iOS/Android: Tocar e pausar imediatamente na interação do usuário
+      if (isOnline) {
+        notifAudio
+          .play()
+          .then(() => notifAudio.pause())
+          .catch(() => {});
+      }
+
+      await dbService.toggleWalkerStatus(user.uid, isOnline);
+      toastService.info(
+        isOnline
+          ? "Você está visível para novos pedidos."
+          : "Você está invisível."
+      );
+    });
+
     window.acceptWalk = async (id) => {
       try {
         const walkId = await walkService.acceptRequest(id);
@@ -140,6 +188,16 @@ export default {
       (requests) => {
         const list = document.getElementById("requests-list");
         if (!list) return;
+
+        // Lógica de Som: Toca se houver pedidos E não estiver em passeio
+        // E se o usuário estiver ONLINE
+        if (requests.length > 0 && !activeWalk && toggleBtn.checked) {
+          notifAudio.play().catch(() => {}); // Ignora erro de autoplay
+        } else {
+          notifAudio.pause();
+          notifAudio.currentTime = 0;
+        }
+
         if (requests.length === 0) {
           // Empty State bonito
           list.innerHTML = `
@@ -158,27 +216,107 @@ export default {
       }
     );
 
+    // --- Lógica de Histórico Walker (Carregamento Inicial) ---
+    const loadWalkerHistory = async () => {
+      const walks = await dbService.getUserWalks(user.uid, "walker");
+      const container = document.getElementById("walker-history-list");
+      const filter = document.getElementById("w-history-filter");
+      let limit = 5;
+
+      const render = () => {
+        const term = filter.value.toLowerCase();
+        const filtered = walks.filter((w) =>
+          (w.dogName || "").toLowerCase().includes(term)
+        );
+        const visible = filtered.slice(0, limit);
+
+        container.innerHTML = visible
+          .map(
+            (w) => `
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <div>
+                        <p class="font-bold text-sm text-gray-800">${
+                          w.dogName
+                        }</p>
+                        <p class="text-xs text-gray-500">${new Date(
+                          w.createdAt.seconds * 1000
+                        ).toLocaleDateString()}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold ${
+                          w.status === "completed"
+                            ? "text-green-600"
+                            : "text-orange-500"
+                        }">${w.status}</span>
+                        <button class="text-gray-400 hover:text-red-500" onclick="window.deleteWalk('${
+                          w.id
+                        }')">🗑️</button>
+                    </div>
+                </div>
+            `
+          )
+          .join("");
+
+        const btnMore = document.getElementById("w-load-more");
+        if (limit >= filtered.length) btnMore.classList.add("hidden");
+        else btnMore.classList.remove("hidden");
+      };
+
+      filter.addEventListener("input", render);
+      document.getElementById("w-load-more").addEventListener("click", () => {
+        limit += 5;
+        render();
+      });
+
+      window.deleteWalk = async (id) => {
+        const modal = document.createElement("div");
+        modal.className =
+          "fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in";
+        modal.innerHTML = `
+            <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+                <h3 class="font-bold text-lg text-gray-900 mb-2">Ocultar Passeio?</h3>
+                <p class="text-gray-500 text-sm mb-6">Este registro será removido da sua visualização de histórico.</p>
+                <div class="flex gap-3">
+                    <button id="btn-cancel-w-hist" class="flex-1 py-3 rounded-xl font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition">Cancelar</button>
+                    <button id="btn-confirm-w-hist" class="flex-1 py-3 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg transition">Ocultar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById("btn-cancel-w-hist").onclick = () =>
+          modal.remove();
+        document.getElementById("btn-confirm-w-hist").onclick = async () => {
+          modal.remove();
+          await dbService.hideWalkHistory(id, "walker");
+          const idx = walks.findIndex((w) => w.id === id);
+          if (idx > -1) walks.splice(idx, 1);
+          render();
+          toastService.success("Histórico atualizado.");
+        };
+      };
+      render();
+    };
+    loadWalkerHistory();
+
     // PWA Logic
     const installBtn = document.getElementById("btn-install-pwa-walker");
-    if (window.deferredPrompt) {
-      installBtn.classList.remove("hidden");
-    }
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      window.deferredPrompt = e;
+
+    const cleanupPwa = pwaService.onInstallable(() => {
       installBtn.classList.remove("hidden");
     });
+
     installBtn.addEventListener("click", async () => {
-      if (!window.deferredPrompt) return;
-      window.deferredPrompt.prompt();
-      const { outcome } = await window.deferredPrompt.userChoice;
-      if (outcome === "accepted") installBtn.classList.add("hidden");
-      window.deferredPrompt = null;
+      const installed = await pwaService.promptInstall();
+      if (installed) installBtn.classList.add("hidden");
     });
 
     return () => {
       if (unsubscribeRequests) unsubscribeRequests();
       window.acceptWalk = null;
+      window.deleteWalk = null;
+      notifAudio.pause();
+      cleanupPwa();
     };
   },
 };
